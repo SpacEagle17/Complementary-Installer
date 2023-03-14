@@ -13,11 +13,13 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.file.Path;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.Scanner;
 import java.util.concurrent.ExecutionException;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -38,7 +40,7 @@ public class NewInstaller extends JFrame {
 
     private static boolean dark = false;
     private boolean installAsMod;
-    private String outdatedPlaceholder = "Warning: We have ended support for <version>.";
+    private String outdatedPlaceholder = "Warning: Iris shader loader have ended support for <version>.";
     private String snapshotPlaceholder = "Warning: <version> is a snapshot build and may";
     private String BASE_URL = "https://raw.githubusercontent.com/IrisShaders/Iris-Installer-Files/master/";
     private boolean finishedSuccessfulInstall;
@@ -51,7 +53,7 @@ public class NewInstaller extends JFrame {
      * Creates new form Installer
      */
     public NewInstaller() {
-        super("Iris Installer");
+        super("Complementary Installer");
         Main.LOADER_META = new MetaHandler(Reference.getMetaServerEndpoint("v2/versions/loader"));
 
         try {
@@ -229,7 +231,7 @@ public class NewInstaller extends JFrame {
         installButton = new javax.swing.JButton();
 
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
-        setIconImage(new ImageIcon(Objects.requireNonNull(Utils.class.getClassLoader().getResource("iris_profile_icon.png"))).getImage());
+        setIconImage(new ImageIcon(Objects.requireNonNull(Utils.class.getClassLoader().getResource("comp_icon.png"))).getImage());
         setMaximumSize(new java.awt.Dimension(480, 600));
         setMinimumSize(new java.awt.Dimension(480, 600));
         setPreferredSize(new java.awt.Dimension(480, 600));
@@ -238,8 +240,8 @@ public class NewInstaller extends JFrame {
 
         irisInstallerLabel.setFont(irisInstallerLabel.getFont().deriveFont((float)36));
         irisInstallerLabel.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
-        irisInstallerLabel.setIcon(new javax.swing.ImageIcon(getClass().getResource("/iris_profile_icon.png"))); // NOI18N
-        irisInstallerLabel.setText(" Iris & Sodium");
+        irisInstallerLabel.setIcon(new javax.swing.ImageIcon(getClass().getResource("/comp_icon.png"))); // NOI18N
+        irisInstallerLabel.setText(" Complementary");
         irisInstallerLabel.setMaximumSize(new java.awt.Dimension(350, 64));
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridx = 1;
@@ -249,7 +251,7 @@ public class NewInstaller extends JFrame {
 
         gameVersionLabel.setFont(gameVersionLabel.getFont().deriveFont(gameVersionLabel.getFont().getStyle() | java.awt.Font.BOLD, 16));
         gameVersionLabel.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
-        gameVersionLabel.setText("Select game version:");
+        gameVersionLabel.setText("Select Minecraft version:");
         gameVersionLabel.setToolTipText("");
         gameVersionLabel.setHorizontalTextPosition(javax.swing.SwingConstants.CENTER);
         gameVersionLabel.setMaximumSize(new java.awt.Dimension(300, 24));
@@ -266,7 +268,7 @@ public class NewInstaller extends JFrame {
         outdatedText1.setFont(outdatedText1.getFont().deriveFont((float)16));
         outdatedText1.setForeground(new java.awt.Color(255, 204, 0));
         outdatedText1.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
-        outdatedText1.setText("Warning: We have ended support for <version>.");
+        outdatedText1.setText("Warning: Iris shader loader have ended support for <version>.");
         outdatedText1.setHorizontalTextPosition(javax.swing.SwingConstants.CENTER);
         outdatedText1.setMaximumSize(new java.awt.Dimension(400, 21));
         outdatedText1.setMinimumSize(new java.awt.Dimension(310, 21));
@@ -322,7 +324,7 @@ public class NewInstaller extends JFrame {
         standaloneType.setFont(standaloneType.getFont().deriveFont((float)16));
         standaloneType.setSelected(true);
         standaloneType.setText("Iris Install");
-        standaloneType.setToolTipText("This installs Iris and Sodium by itself, without any mods.");
+        standaloneType.setToolTipText("Installs Iris + Sodium by itself, and adds Complementary.");
         standaloneType.addMouseListener(new java.awt.event.MouseAdapter() {
             public void mouseClicked(java.awt.event.MouseEvent evt) {
                 standaloneTypeMouseClicked(evt);
@@ -333,7 +335,7 @@ public class NewInstaller extends JFrame {
         installType.add(fabricType);
         fabricType.setFont(fabricType.getFont().deriveFont((float)16));
         fabricType.setText("Fabric Install");
-        fabricType.setToolTipText("This installs Iris and Sodium alongside an installation of Fabric.");
+        fabricType.setToolTipText("Installs Iris + Sodium on an installation of Fabric Loader, and adds Complementary.");
         fabricType.addMouseListener(new java.awt.event.MouseAdapter() {
             public void mouseClicked(java.awt.event.MouseEvent evt) {
                 fabricTypeMouseClicked(evt);
@@ -502,21 +504,21 @@ public class NewInstaller extends JFrame {
         progressBar.setValue(0);
 
         String zipName = (betaSelection.isSelected() ? "Iris-Sodium-Beta" : "Iris-Sodium") + "-" + selectedVersion.name + ".zip";
-        String downloadURL = "https://github.com/IrisShaders/Iris-Installer-Files/releases/latest/download/" + zipName;
+        String irisDownURL = "https://github.com/IrisShaders/Iris-Installer-Files/releases/latest/download/" + zipName;
         File saveLocation = getStorageDirectory().resolve(zipName).toFile();
 
-        final Downloader downloader = new Downloader(downloadURL, saveLocation);
-        downloader.addPropertyChangeListener(event -> {
-            if ("progress".equals(event.getPropertyName())) {
-                progressBar.setValue((Integer) event.getNewValue());
-            } else if (event.getNewValue() == SwingWorker.StateValue.DONE) {
+        final Downloader downloaderI = new Downloader(irisDownURL, saveLocation);
+        downloaderI.addPropertyChangeListener(eventI -> {
+            if ("progress".equals(eventI.getPropertyName())) {
+                progressBar.setValue(((Integer) eventI.getNewValue() ) * 3 / 4);
+            } else if (eventI.getNewValue() == SwingWorker.StateValue.DONE) {
                 try {
-                    downloader.get();
+                    downloaderI.get();
                 } catch (InterruptedException | ExecutionException e) {
-                    System.out.println("Failed to download zip!");
+                    System.out.println("Failed to download Iris!");
                     e.getCause().printStackTrace();
 
-                    String msg = String.format("An error occurred while attempting to download the required files, please check your internet connection and try again! \nError: %s",
+                    String msg = String.format("An error occurred while attempting to download Iris and Sodium, please check your internet connection and try again! \nError: %s",
                             e.getCause().toString());
                     installButton.setEnabled(true);
                     installButton.setText("Download Failed!");
@@ -526,8 +528,6 @@ public class NewInstaller extends JFrame {
                             msg, "Download Failed!", JOptionPane.ERROR_MESSAGE, null);
                     return;
                 }
-
-                installButton.setText("Download Complete!");
 
                 boolean cancelled = false;
 
@@ -610,15 +610,78 @@ public class NewInstaller extends JFrame {
                     modsFolder.mkdir();
                 }
 
-                boolean installSuccess = installFromZip(saveLocation);
+                boolean installISuccess = installFromZip(saveLocation);
 
-                if (installSuccess) {
-                    installButton.setText("Completed!");
-                    //installButton.setMargin(new java.awt.Insets(10, 80, 10, 80));
+                if (installISuccess) {
+                    URL url = null;
+                    String shaderName = null;
+                    try {
+                        url = new URL("https://www.complementary.dev/changelogs/reimagined-ch/rLatest.txt");
+                        Scanner scan = new Scanner(url.openStream());
+                        shaderName = scan.nextLine();
+                    } catch (IOException e) {
+                        System.out.println("Failed to download Comp!");
+                        e.getCause().printStackTrace();
 
-                    progressBar.setForeground(new Color(39, 195, 75));
-                    installButton.setEnabled(true);
-                    finishedSuccessfulInstall = true;
+                        String msg = String.format("An error occurred while attempting to download Complementary files, please check your internet connection and try again! \nError: %s",
+                                e.getCause().toString());
+                        installButton.setEnabled(true);
+                        installButton.setText("Download Failed!");
+                        progressBar.setForeground(new Color(204, 0, 0));
+                        progressBar.setValue(100);
+                        JOptionPane.showMessageDialog(this,
+                                msg, "Download Failed!", JOptionPane.ERROR_MESSAGE, null);
+                        return;
+                    }
+
+                    String compDownURL = "https://github.com/ComplementaryDevelopment/ComplementaryReimagined/releases/download/latest/"+shaderName;
+                    File shaderDir = getVanillaGameDir().resolve("shaderpacks").toFile();
+                    if (!shaderDir.exists() || !shaderDir.isDirectory()) {
+                        shaderDir.mkdir();
+                    }
+                    File shaderLoc = getVanillaGameDir().resolve("shaderpacks").resolve(shaderName).toFile();
+
+                    final Downloader downloaderC = new Downloader(compDownURL, shaderLoc);
+                    String finalShaderName = shaderName;
+                    downloaderC.addPropertyChangeListener(eventC -> {
+                        if ("progress".equals(eventC.getPropertyName())) {
+                            progressBar.setValue(285 + ((Integer) eventC.getNewValue() ) / 4);
+                        } else if (eventC.getNewValue() == SwingWorker.StateValue.DONE) {
+                            try {
+                                downloaderC.get();
+                            } catch (InterruptedException | ExecutionException e) {
+                                System.out.println("Failed to download Comp!");
+                                e.getCause().printStackTrace();
+
+                                String msg = String.format("An error occurred while attempting to download Complementary files, please check your internet connection and try again! \nError: %s",
+                                        e.getCause().toString());
+                                installButton.setEnabled(true);
+                                installButton.setText("Download Failed!");
+                                progressBar.setForeground(new Color(204, 0, 0));
+                                progressBar.setValue(100);
+                                JOptionPane.showMessageDialog(this,
+                                        msg, "Download Failed!", JOptionPane.ERROR_MESSAGE, null);
+                                return;
+                            }
+
+                            installButton.setText("Completed!");
+                            //installButton.setMargin(new java.awt.Insets(10, 80, 10, 80));
+
+                            progressBar.setForeground(new Color(39, 195, 75));
+                            installButton.setEnabled(false);
+                            finishedSuccessfulInstall = true;
+
+                            System.out.println("Finished Successful Install");
+                            String msg = "Successfully installed Iris, Sodium, and "
+                                         +finalShaderName;
+                            JOptionPane.showMessageDialog(this,
+                                    msg, "Installation Complete!", JOptionPane.PLAIN_MESSAGE, new ImageIcon(Objects.requireNonNull(Utils.class.getClassLoader().getResource("green_tick.png"))));
+                            System.exit(111);
+                            return;
+                        }
+                    });
+
+                    downloaderC.execute();
                 } else {
                     installButton.setText("Failed!");
                     progressBar.setForeground(new Color(204, 0, 0));
@@ -628,7 +691,7 @@ public class NewInstaller extends JFrame {
             }
         });
 
-        downloader.execute();
+        downloaderI.execute();
     }//GEN-LAST:event_installButtonMouseClicked
 
     /**
