@@ -8,18 +8,12 @@ import com.formdev.flatlaf.FlatDarkLaf;
 import com.formdev.flatlaf.FlatLightLaf;
 import java.awt.Color;
 import java.awt.event.ItemEvent;
-import java.io.BufferedOutputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
+import java.io.*;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Collections;
-import java.util.List;
-import java.util.Objects;
-import java.util.Scanner;
+import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -664,19 +658,39 @@ public class NewInstaller extends JFrame {
                                 return;
                             }
 
-                            installButton.setText("Completed!");
-                            //installButton.setMargin(new java.awt.Insets(10, 80, 10, 80));
+                            File configDir = getVanillaGameDir().resolve("config").toFile();
+                            if (!configDir.exists() || !configDir.isDirectory()) {
+                                configDir.mkdir();
+                            }
+                            Path ipDir = getVanillaGameDir().resolve("config").resolve("iris.properties");
+                            Properties irisProp = new Properties();
+                            if (Files.exists(ipDir)) {
+                                try (InputStream is = Files.newInputStream(ipDir)) {
+                                    irisProp.load(is);
+                                } catch (IOException e) {
+                                    System.out.println("Failed to read iris.properties");
+                                }
+                            }
+                            irisProp.setProperty("shaderPack", finalShaderName);
+                            irisProp.setProperty("enableShaders", "true");
+                            try (OutputStream os = Files.newOutputStream(ipDir)) {
+                                irisProp.store(os, "File written by Comp Installer");
+                            } catch (IOException e) {
+                                System.out.println("Failed to write iris.properties");
+                            }
 
+                            installButton.setText("Completed!");
                             progressBar.setForeground(new Color(39, 195, 75));
                             installButton.setEnabled(false);
                             finishedSuccessfulInstall = true;
-
                             System.out.println("Finished Successful Install");
+                            String loaderMsg = installAsMod ? "fabric-loader" : "iris-fabric-loader";
                             String msg = "Successfully installed Iris, Sodium, and "
-                                         +finalShaderName;
+                                         +finalShaderName+
+                                         "\nYou can launch the game by selecting the "+loaderMsg+" installation in your Minecraft launcher.";
                             JOptionPane.showMessageDialog(this,
                                     msg, "Installation Complete!", JOptionPane.PLAIN_MESSAGE, new ImageIcon(Objects.requireNonNull(Utils.class.getClassLoader().getResource("green_tick.png"))));
-                            System.exit(111);
+                            System.exit(0);
                             return;
                         }
                     });
