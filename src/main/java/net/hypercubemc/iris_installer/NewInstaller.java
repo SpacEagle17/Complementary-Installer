@@ -34,7 +34,7 @@ public class NewInstaller extends JFrame {
 
     private static boolean dark = false;
     private boolean installAsMod;
-    private String outdatedPlaceholder = "Warning: Iris shader loader have ended support for <version>.";
+    private String outdatedPlaceholder = "Warning: Iris shader loader has ended support for <version>.";
     private String snapshotPlaceholder = "Warning: <version> is a snapshot build and may";
     private String BASE_URL = "https://raw.githubusercontent.com/IrisShaders/Iris-Installer-Files/master/";
     private boolean finishedSuccessfulInstall;
@@ -262,7 +262,7 @@ public class NewInstaller extends JFrame {
         outdatedText1.setFont(outdatedText1.getFont().deriveFont((float)16));
         outdatedText1.setForeground(new java.awt.Color(255, 204, 0));
         outdatedText1.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
-        outdatedText1.setText("Warning: Iris shader loader have ended support for <version>.");
+        outdatedText1.setText("Warning: Iris shader loader has ended support for <version>.");
         outdatedText1.setHorizontalTextPosition(javax.swing.SwingConstants.CENTER);
         outdatedText1.setMaximumSize(new java.awt.Dimension(400, 21));
         outdatedText1.setMinimumSize(new java.awt.Dimension(310, 21));
@@ -466,6 +466,11 @@ public class NewInstaller extends JFrame {
     }//GEN-LAST:event_fabricTypeMouseClicked
 
     private void installButtonMouseClicked(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_installButtonMouseClicked
+        installButton.setText("Downloading...");
+        installButton.setEnabled(false);
+        progressBar.setForeground(new Color(76, 135, 200));
+        progressBar.setValue(0);
+
         String loaderName = installAsMod ? "fabric-loader" : "iris-fabric-loader";
 
         try {
@@ -490,13 +495,6 @@ public class NewInstaller extends JFrame {
             storageDir.mkdir();
         }
 
-        installButton.setText("Downloading...");
-        //installButton.setMargin(new java.awt.Insets(10, 90, 10, 90));
-
-        installButton.setEnabled(false);
-        progressBar.setForeground(new Color(76, 135, 200));
-        progressBar.setValue(0);
-
         String zipName = (betaSelection.isSelected() ? "Iris-Sodium-Beta" : "Iris-Sodium") + "-" + selectedVersion.name + ".zip";
         String irisDownURL = "https://github.com/IrisShaders/Iris-Installer-Files/releases/latest/download/" + zipName;
         File saveLocation = getStorageDirectory().resolve(zipName).toFile();
@@ -504,7 +502,7 @@ public class NewInstaller extends JFrame {
         final Downloader downloaderI = new Downloader(irisDownURL, saveLocation);
         downloaderI.addPropertyChangeListener(eventI -> {
             if ("progress".equals(eventI.getPropertyName())) {
-                progressBar.setValue(((Integer) eventI.getNewValue() ) * 3 / 4);
+                progressBar.setValue(((Integer) eventI.getNewValue() ) / 2);
             } else if (eventI.getNewValue() == SwingWorker.StateValue.DONE) {
                 try {
                     downloaderI.get();
@@ -639,7 +637,7 @@ public class NewInstaller extends JFrame {
                     String finalShaderName = shaderName;
                     downloaderC.addPropertyChangeListener(eventC -> {
                         if ("progress".equals(eventC.getPropertyName())) {
-                            progressBar.setValue(285 + ((Integer) eventC.getNewValue() ) / 4);
+                            progressBar.setValue(50 + ((Integer) eventC.getNewValue() ) / 2);
                         } else if (eventC.getNewValue() == SwingWorker.StateValue.DONE) {
                             try {
                                 downloaderC.get();
@@ -684,10 +682,10 @@ public class NewInstaller extends JFrame {
                             installButton.setEnabled(false);
                             finishedSuccessfulInstall = true;
                             System.out.println("Finished Successful Install");
-                            String loaderMsg = installAsMod ? "fabric-loader" : "iris-fabric-loader";
+                            String loaderSt = installAsMod ? "fabric-loader" : "iris-fabric-loader";
                             String msg = "Successfully installed Iris, Sodium, and "
-                                         +finalShaderName+
-                                         "\nYou can launch the game by selecting the "+loaderMsg+" installation in your Minecraft launcher.";
+                                         +finalShaderName+"."+
+                                         "\nYou can run the game by selecting "+loaderSt+" in your Minecraft launcher.";
                             JOptionPane.showMessageDialog(this,
                                     msg, "Installation Complete!", JOptionPane.PLAIN_MESSAGE, new ImageIcon(Objects.requireNonNull(Utils.class.getClassLoader().getResource("green_tick.png"))));
                             System.exit(0);

@@ -101,7 +101,7 @@
           <Color blue="0" green="cc" red="ff" type="rgb"/>
         </Property>
         <Property name="horizontalAlignment" type="int" value="0"/>
-        <Property name="text" type="java.lang.String" value="Warning: Iris shader loader have ended support for &lt;version&gt;."/>
+        <Property name="text" type="java.lang.String" value="Warning: Iris shader loader has ended support for &lt;version&gt;."/>
         <Property name="horizontalTextPosition" type="int" value="0"/>
         <Property name="maximumSize" type="java.awt.Dimension" editor="org.netbeans.beaninfo.editors.DimensionEditor">
           <Dimension value="[400, 21]"/>
