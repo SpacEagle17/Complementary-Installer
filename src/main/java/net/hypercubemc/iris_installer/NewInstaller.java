@@ -302,11 +302,11 @@ public class NewInstaller extends JFrame {
         gridBagConstraints.insets = new java.awt.Insets(20, 0, 0, 0);
         getContentPane().add(visualStyleContainer, gridBagConstraints);
 
-        linkLabel.setText("<html><a href='http://127.0.0.1:5500/shaders/#style-section'>What's the difference?</a></html>");
+        linkLabel.setText("<html><a href='https://www.complementary.dev/shaders/#style-section'>What's the difference?</a></html>");
         linkLabel.addMouseListener(new java.awt.event.MouseAdapter() {
             public void mouseReleased(java.awt.event.MouseEvent evt) {
                 try {
-                    Desktop.getDesktop().browse(new URI("http://127.0.0.1:5500/shaders/#style-section"));
+                    Desktop.getDesktop().browse(new URI("https://www.complementary.dev/shaders/#style-section"));
                 } catch (IOException e) {
                     e.printStackTrace();
                 } catch (URISyntaxException e) {
