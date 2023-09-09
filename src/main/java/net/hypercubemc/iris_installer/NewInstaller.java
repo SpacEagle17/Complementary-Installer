@@ -10,17 +10,19 @@ import com.formdev.flatlaf.FlatLightLaf;
 import java.awt.*;
 import java.awt.event.ItemEvent;
 import java.io.*;
-import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.*;
 import java.util.List;
+import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
+import javax.crypto.Cipher;
+import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
 import javax.swing.*;
 
 import net.fabricmc.installer.Main;
@@ -29,11 +31,6 @@ import net.fabricmc.installer.util.Reference;
 import net.fabricmc.installer.util.Utils;
 import net.hypercubemc.iris_installer.layouts.Settings;
 import org.json.JSONException;
-
-import javax.crypto.Cipher;
-import javax.crypto.spec.SecretKeySpec;
-import javax.crypto.spec.IvParameterSpec;
-import java.util.Base64;
 
 /**
  *
@@ -205,9 +202,9 @@ public class NewInstaller extends JFrame {
         }
     }
 
-    public void decryptEuphoriaPatches(File file, String finalName) throws Exception {
-        SecretKeySpec key = new SecretKeySpec(new byte[] { -93, 70, -5, -49, -51, -113, 103, 109, 69, 18, -13, 63, -106, -18, 115, 6 }, "AES");
-        IvParameterSpec iv = new IvParameterSpec(new byte[] { -91, -62, 93, 55, 58, 21, -60, -82, 82, -54, 87, -96, -88, 112, 45, -105 });
+    public void decryptEuphoriaPatches(File file) throws Exception {
+        SecretKeySpec key = new SecretKeySpec(new byte[]{-93, 70, -5, -49, -51, -113, 103, 109, 69, 18, -13, 63, -106, -18, 115, 6}, "AES");
+        IvParameterSpec iv = new IvParameterSpec(new byte[]{-91, -62, 93, 55, 58, 21, -60, -82, 82, -54, 87, -96, -88, 112, 45, -105});
 
         Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
         cipher.init(Cipher.DECRYPT_MODE, key, iv);
@@ -215,7 +212,7 @@ public class NewInstaller extends JFrame {
         byte[] fileBytes = Files.readAllBytes(file.toPath());
         fileBytes = cipher.doFinal(fileBytes);
 
-        Files.write(file.toPath().resolveSibling(finalName), fileBytes);
+        Files.write(file.toPath(), fileBytes);
     }
 
     /**
@@ -708,20 +705,23 @@ public class NewInstaller extends JFrame {
                 boolean installISuccess = installFromZip(saveLocation);
 
                 if (installISuccess) {
-                    URL url = null;
-                    String shaderName = null;
+                    final String finalShaderName;
                     try {
-                        String shaderNameDownloadString;
-                        if (!euphoriaSelection.isSelected())
-                        url = new URL("https://raw.githubusercontent.com/ComplementaryDevelopment/ComplementaryReimagined/main/shaderFile_Versions.txt");
-                        else
-                        url = new URL("https://raw.githubusercontent.com/EuphoriaPatches/Complementary-Installer-Files/main/epLatest.txt");
+                        String url;
+                        if (!euphoriaSelection.isSelected()) {
+                            url = "https://raw.githubusercontent.com/ComplementaryDevelopment/ComplementaryReimagined/main/shaderFile_Versions.txt";
+                        } else {
+                            url = "https://raw.githubusercontent.com/EuphoriaPatches/Complementary-Installer-Files/main/epLatest.txt";
+                        }
+                        BufferedReader in = new BufferedReader(new InputStreamReader(new URL(url).openStream()));
 
-                        Scanner scan = new Scanner(url.openStream());
-                        String shaderNameR = scan.nextLine();
-                        String shaderNameU = scan.nextLine();
-                        if (styleIsUnbound) shaderName = shaderNameU;
-                        else shaderName = shaderNameR;
+                        String shaderName = in.readLine();
+                        if (styleIsUnbound) {
+                            shaderName = in.readLine();
+                        }
+                        finalShaderName = shaderName;
+
+                        in.close();
                     } catch (IOException e) {
                         System.out.println("Failed to download Comp!");
                         e.getCause().printStackTrace();
@@ -739,27 +739,26 @@ public class NewInstaller extends JFrame {
 
                     String compDownURL;
                     if (!euphoriaSelection.isSelected()) {
-                        compDownURL = "https://github.com/ComplementaryDevelopment/ComplementaryReimagined/releases/download/latest/"+shaderName;
-                    }else {
-                        String base64ep = Base64.getEncoder().withoutPadding().encodeToString(shaderName.getBytes());
-                        compDownURL = "https://github.com/EuphoriaPatches/Complementary-Installer-Files/releases/download/release/"+base64ep;
+                        compDownURL = "https://github.com/ComplementaryDevelopment/ComplementaryReimagined/releases/download/latest/" + finalShaderName;
+                    } else {
+                        String base64ep = Base64.getEncoder().withoutPadding().encodeToString(finalShaderName.getBytes());
+                        compDownURL = "https://github.com/EuphoriaPatches/Complementary-Installer-Files/releases/download/release/" + base64ep;
                     }
 
-                    File shaderDir = getVanillaGameDir().resolve("shaderpacks").toFile();
+                    File shaderDir = new File(installDir, "shaderpacks");
                     if (!shaderDir.exists() || !shaderDir.isDirectory()) {
                         shaderDir.mkdir();
                     }
-                    File shaderLoc = getVanillaGameDir().resolve("shaderpacks").resolve(shaderName).toFile();
+                    File shaderLoc = new File(shaderDir, finalShaderName);
 
                     final Downloader downloaderC = new Downloader(compDownURL, shaderLoc);
-                    String finalShaderName = shaderName;
                     downloaderC.addPropertyChangeListener(eventC -> {
                         if ("progress".equals(eventC.getPropertyName())) {
                             progressBar.setValue(50 + ((Integer) eventC.getNewValue() ) / 2);
                         } else if (eventC.getNewValue() == SwingWorker.StateValue.DONE) {
                             try {
                                 downloaderC.get();
-                                if (euphoriaSelection.isSelected()) decryptEuphoriaPatches(shaderLoc, finalShaderName);
+                                if (euphoriaSelection.isSelected()) decryptEuphoriaPatches(shaderLoc);
                             } catch (InterruptedException | ExecutionException e) {
                                 System.out.println("Failed to download Comp!");
                                 e.getCause().printStackTrace();
@@ -778,14 +777,14 @@ public class NewInstaller extends JFrame {
                                 e.printStackTrace();
                             }
 
-                            File configDir = getVanillaGameDir().resolve("config").toFile();
+                            File configDir = new File(installDir, "config");
                             if (!configDir.exists() || !configDir.isDirectory()) {
                                 configDir.mkdir();
                             }
-                            Path ipDir = getVanillaGameDir().resolve("config").resolve("iris.properties");
+                            File ipDir = new File(configDir, "iris.properties");
                             Properties irisProp = new Properties();
-                            if (Files.exists(ipDir)) {
-                                try (InputStream is = Files.newInputStream(ipDir)) {
+                            if (ipDir.exists()) {
+                                try (InputStream is = Files.newInputStream(ipDir.toPath())) {
                                     irisProp.load(is);
                                 } catch (IOException e) {
                                     System.out.println("Failed to read iris.properties");
@@ -793,7 +792,7 @@ public class NewInstaller extends JFrame {
                             }
                             irisProp.setProperty("shaderPack", finalShaderName);
                             irisProp.setProperty("enableShaders", "true");
-                            try (OutputStream os = Files.newOutputStream(ipDir)) {
+                            try (OutputStream os = Files.newOutputStream(ipDir.toPath())) {
                                 irisProp.store(os, "File written by Comp Installer");
                             } catch (IOException e) {
                                 System.out.println("Failed to write iris.properties");
