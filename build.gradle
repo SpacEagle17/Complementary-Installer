@@ -23,8 +23,8 @@ repositories {
 dependencies {
     implementation "org.json:json:20210307"
     implementation "com.formdev:flatlaf:1.6.1"
-
-    implementation "net.fabricmc:fabric-installer:1.0.0"
+    compileOnly "org.lwjgl:lwjgl-tinyfd:3.3.2"
+    implementation "net.fabricmc:fabric-installer:1.0.1"
 }
 
 application {
@@ -36,7 +36,7 @@ class FileOutput extends DefaultTask {
     File output
 }
 
-def bootstrapVersion = "0.5.1"
+def bootstrapVersion = "0.5.2"
 def bootstrapArch = "i686"
 
 task downloadBootstrap(type: Download) {
@@ -70,6 +70,7 @@ jar {
         attributes("Main-Class": application.mainClass)
     }
 
+    duplicatesStrategy = DuplicatesStrategy.WARN
     from "LICENSE"
 
     from (configurations.compileClasspath.filter{ it.exists() }.collect { it.isDirectory() ? it : zipTree(it) }) {

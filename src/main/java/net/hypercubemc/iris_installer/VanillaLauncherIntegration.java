@@ -60,6 +60,7 @@ public class VanillaLauncherIntegration {
         json.compute("id", (ignored, existing) -> factory.string("iris-" + existing.asString()));
 
         // Add the JVM argument -Diris.installer=true so Iris can detect if the installer is used
+        json.getOrDefault("arguments", Json.array()).asJsonMap().getOrDefault("jvm", Json.array()).asJsonList().add(factory.string("-Diris.installer=true"));
         json.getOrDefault("arguments", Json.array()).asJsonMap().getOrDefault("jvm", Json.array()).asJsonList().add(factory.string("-Dfabric.modsFolder=" + modsFolder.toAbsolutePath().toString()));    }
 
     private static void installProfile(Component parent, Path mcDir, Path instanceDir, String profileName, String versionId, Icon icon, ProfileInstaller.LauncherType launcherType) throws IOException {
