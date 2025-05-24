@@ -10,8 +10,8 @@ import com.formdev.flatlaf.FlatLightLaf;
 import java.awt.*;
 import java.awt.event.ItemEvent;
 import java.io.*;
+import java.net.HttpURLConnection;
 import java.net.URI;
-import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -27,25 +27,25 @@ import javax.swing.*;
 
 import net.fabricmc.installer.Main;
 import net.fabricmc.installer.util.MetaHandler;
-import net.fabricmc.installer.util.Reference;
 import net.fabricmc.installer.util.Utils;
 import net.hypercubemc.iris_installer.layouts.Settings;
+import org.json.JSONArray;
 import org.json.JSONException;
+import org.json.JSONObject;
 
 /**
  *
  * @author ims --- and Emin (less so)
  */
-@SuppressWarnings("serial")
+@SuppressWarnings({"serial", "CallToPrintStackTrace", "ResultOfMethodCallIgnored"})
 public class NewInstaller extends JFrame {
 
     private static boolean dark = false;
     private boolean installAsMod;
     private boolean styleIsUnbound = true;
-    private String outdatedPlaceholder = "Warning: Iris shader loader has ended support for <version>.";
-    private String snapshotPlaceholder = "Warning: <version> is a snapshot build and may";
-    private String BASE_URL = "https://raw.githubusercontent.com/IrisShaders/Iris-Installer-Files/master/";
-    private boolean finishedSuccessfulInstall;
+    private final String outdatedPlaceholder = "Warning: Iris shader loader has ended support for <version>.";
+    private final String snapshotPlaceholder = "Warning: <version> is a snapshot build and may";
+    private final String BASE_URL = "https://raw.githubusercontent.com/IrisShaders/Iris-Installer-Files/master/";
     private InstallerMeta.Version selectedVersion;
     private final List<InstallerMeta.Version> GAME_VERSIONS;
     private final InstallerMeta INSTALLER_META;
@@ -60,30 +60,11 @@ public class NewInstaller extends JFrame {
         super("Complementary Installer");
         Main.LOADER_META = new MetaHandler(("v2/versions/loader"));
 
-        try {
-            Main.LOADER_META.load();
-        } catch (IOException e) {
-            System.out.println("Failed to fetch fabric version info from the server!");
-            e.printStackTrace();
-            JOptionPane.showMessageDialog(null, "The installer was unable to fetch fabric version info from the server, please check your internet connection and try again later.", "Please check your internet connection!", JOptionPane.ERROR_MESSAGE);
-            throw new RuntimeException(e);
-        }
+        loadFabricMeta();
 
         INSTALLER_META = new InstallerMeta(BASE_URL + "meta-new.json");
 
-        try {
-            INSTALLER_META.load();
-        } catch (IOException e) {
-            System.out.println("Failed to fetch installer metadata from the server!");
-            e.printStackTrace();
-            JOptionPane.showMessageDialog(null, "The installer was unable to fetch metadata from the server, please check your internet connection and try again later.", "Please check your internet connection!", JOptionPane.ERROR_MESSAGE);
-            throw new RuntimeException(e);
-        } catch (JSONException e) {
-            System.out.println("Failed to fetch installer metadata from the server!");
-            e.printStackTrace();
-            JOptionPane.showMessageDialog(null, "Installer metadata parsing failed, please contact the Iris support team via Discord! \nError: " + e, "Metadata Parsing Failed!", JOptionPane.ERROR_MESSAGE);
-            throw new RuntimeException(e);
-        }
+        loadMetadata();
 
         GAME_VERSIONS = INSTALLER_META.getVersions();
         Collections.reverse(GAME_VERSIONS);
@@ -111,6 +92,35 @@ public class NewInstaller extends JFrame {
         // Hide outdated version text
         outdatedText1.setVisible(false);
         outdatedText2.setVisible(false);
+    }
+
+    private void loadFabricMeta() {
+        try {
+            Main.LOADER_META.load();
+        } catch (IOException e) {
+            if (isNetworkError(e) && showNetworkErrorDialog("loading fabric metadata")) {
+                loadFabricMeta(); // retry
+                return;
+            }
+            throw new RuntimeException(e);
+        }
+    }
+
+    private void loadMetadata() {
+        try {
+            INSTALLER_META.load();
+        } catch (IOException e) {
+            if (isNetworkError(e) && showNetworkErrorDialog("loading installer metadata")) {
+                loadMetadata(); // retry
+                return;
+            }
+            throw new RuntimeException(e);
+        } catch (JSONException e) {
+            System.out.println("Failed to fetch installer metadata from the server!");
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(null, "Installer metadata parsing failed, please contact the Iris support team via Discord! \nError: " + e, "Metadata Parsing Failed!", JOptionPane.ERROR_MESSAGE);
+            throw new RuntimeException(e);
+        }
     }
 
     public Path getStorageDirectory() {
@@ -212,7 +222,48 @@ public class NewInstaller extends JFrame {
         byte[] fileBytes = Files.readAllBytes(file.toPath());
         fileBytes = cipher.doFinal(fileBytes);
 
+        System.out.println("Decrypting Euphoria Patches...");
+
         Files.write(file.toPath(), fileBytes);
+    }
+
+    public static boolean isInternetNotAvailable() {
+        try {
+            URL url = new URL("https://www.google.com");
+            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            connection.setConnectTimeout(3000); // 3 second timeout
+            connection.setReadTimeout(3000);
+            connection.setRequestMethod("HEAD");
+            int responseCode = connection.getResponseCode();
+            return (responseCode != HttpURLConnection.HTTP_OK);
+        } catch (Exception e) {
+            return true;
+        }
+    }
+
+    private boolean showNetworkErrorDialog(String operationName) {
+        String message = "Internet connection lost while " + operationName + ".\n" +
+                        "Please check your connection and try again.";
+        
+        int response = JOptionPane.showConfirmDialog(
+            this,
+            message,
+            "Network Connection Error",
+            JOptionPane.YES_NO_OPTION,
+            JOptionPane.ERROR_MESSAGE
+        );
+        
+        // Only manipulate UI components if they've been initialized
+        if (installButton != null) {
+            installButton.setEnabled(true);
+            installButton.setText("Install");
+        }
+        
+        if (progressBar != null) {
+            progressBar.setValue(0);
+        }
+        
+        return response == JOptionPane.YES_OPTION;
     }
 
     /**
@@ -242,13 +293,15 @@ public class NewInstaller extends JFrame {
         unboundType = new javax.swing.JRadioButton();
         reimaginedType = new javax.swing.JRadioButton();
         styleType = new javax.swing.ButtonGroup();
-        visualStyleType = new javax.swing.JLabel();
         visualStyleContainer = new javax.swing.JPanel();
         gameVersionList = new javax.swing.JComboBox<>();
         euphoriaSelection = new javax.swing.JCheckBox();
         directoryName = new javax.swing.JButton();
         progressBar = new javax.swing.JProgressBar();
         installButton = new javax.swing.JButton();
+        installationExplanation = new javax.swing.JLabel();
+        euphoriaDescription = new JLabel();
+
 
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
         setIconImage(new ImageIcon(Objects.requireNonNull(Utils.class.getClassLoader().getResource("comp_icon.png"))).getImage());
@@ -260,7 +313,7 @@ public class NewInstaller extends JFrame {
 
         irisInstallerLabel.setFont(irisInstallerLabel.getFont().deriveFont((float)36));
         irisInstallerLabel.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
-        irisInstallerLabel.setIcon(new javax.swing.ImageIcon(getClass().getResource("/comp_icon.png"))); // NOI18N
+        irisInstallerLabel.setIcon(new javax.swing.ImageIcon(Objects.requireNonNull(getClass().getResource("/comp_icon.png")))); // NOI18N
         irisInstallerLabel.setText(" Complementary");
         irisInstallerLabel.setMaximumSize(new java.awt.Dimension(350, 64));
         gridBagConstraints = new java.awt.GridBagConstraints();
@@ -302,13 +355,7 @@ public class NewInstaller extends JFrame {
         linkLabel.setText("<html><a href='https://www.complementary.dev/shaders/#style-section'>What's the difference?</a></html>");
         linkLabel.addMouseListener(new java.awt.event.MouseAdapter() {
             public void mouseReleased(java.awt.event.MouseEvent evt) {
-                try {
-                    Desktop.getDesktop().browse(new URI("https://www.complementary.dev/shaders/#style-section"));
-                } catch (IOException e) {
-                    e.printStackTrace();
-                } catch (URISyntaxException e) {
-                    e.printStackTrace();
-                }
+                openURL(URI.create("https://www.complementary.dev/shaders/#style-section"));
             }
         });
         linkLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
@@ -334,7 +381,7 @@ public class NewInstaller extends JFrame {
         gridBagConstraints.fill = java.awt.GridBagConstraints.HORIZONTAL;
         gridBagConstraints.insets = new java.awt.Insets(20, 0, 0, 0);
         getContentPane().add(gameVersionLabel, gridBagConstraints);
-        gameVersionList.setFont(new java.awt.Font("Arial", 0, 14)); // NOI18N
+        gameVersionList.setFont(new java.awt.Font("Arial", Font.PLAIN, 14)); // NOI18N
         gameVersionList.setModel(new javax.swing.DefaultComboBoxModel<>(new String[] { "1.19", "1.18.2", "1.17.1", "1.16.5" }));
         gameVersionList.setMaximumSize(new java.awt.Dimension(168, 35));
         gameVersionList.setMinimumSize(new java.awt.Dimension(168, 35));
@@ -408,7 +455,7 @@ public class NewInstaller extends JFrame {
         gridBagConstraints.insets = new java.awt.Insets(30, 0, 0, 0);
         getContentPane().add(progressBar, gridBagConstraints);
 
-        installButton.setFont(installButton.getFont().deriveFont((float)20).deriveFont(1));
+        installButton.setFont(installButton.getFont().deriveFont((float)20).deriveFont(Font.BOLD));
         installButton.setText("Install");
         installButton.setToolTipText("");
         installButton.setMargin(new java.awt.Insets(10, 70, 10, 70));
@@ -471,7 +518,7 @@ public class NewInstaller extends JFrame {
             installType.add(standaloneType);
             standaloneType.setFont(standaloneType.getFont().deriveFont((float)16));
             standaloneType.setSelected(true);
-            standaloneType.setText("Iris Install");
+            standaloneType.setText("Iris Only");
             standaloneType.setToolTipText("Installs Iris + Sodium by itself, and adds Complementary.");
             standaloneType.addMouseListener(new java.awt.event.MouseAdapter() {
                 public void mouseReleased(java.awt.event.MouseEvent evt) {
@@ -482,7 +529,7 @@ public class NewInstaller extends JFrame {
 
             installType.add(fabricType);
             fabricType.setFont(fabricType.getFont().deriveFont((float)16));
-            fabricType.setText("Fabric Install");
+            fabricType.setText("Iris + Fabric");
             fabricType.setToolTipText("Installs Iris + Sodium on an installation of Fabric Loader, and adds Complementary.");
             fabricType.addMouseListener(new java.awt.event.MouseAdapter() {
                 public void mouseReleased(java.awt.event.MouseEvent evt) {
@@ -496,6 +543,30 @@ public class NewInstaller extends JFrame {
             gridBagConstraints.insets = new java.awt.Insets(6, 0, 0, 0);
         settings.add(installationTypesContainer, gridBagConstraints);
 
+        installationExplanation = new javax.swing.JLabel();
+        installationExplanation.setFont(installationExplanation.getFont().deriveFont((float)16));
+        installationExplanation.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
+        installationExplanation.setText("<html><center>Recommended one-click solution for shader installation</center></html>");
+        installationExplanation.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
+        
+        gridBagConstraints = new java.awt.GridBagConstraints();
+        gridBagConstraints.gridx = 1;
+        gridBagConstraints.gridy = 5; // Place it below the radio buttons
+        gridBagConstraints.fill = java.awt.GridBagConstraints.HORIZONTAL;
+        gridBagConstraints.insets = new java.awt.Insets(5, 0, 0, 0);
+        settings.add(installationExplanation, gridBagConstraints);
+
+        // Update existing radio button listeners to also update the explanation text
+        standaloneType.addActionListener(e -> {
+            standaloneTypeMouseClicked(null);
+            installationExplanation.setText("<html><center>Recommended one-click solution for shader installation</center></html>");
+        });
+        
+        fabricType.addActionListener(e -> {
+            fabricTypeMouseClicked(null);
+            installationExplanation.setText("<html><center>Choose this if you want to use other Fabric mods alongside shaders</center></html>");
+        });
+
         euphoriaSelection.setSelected(false);
         euphoriaSelection.setFont(euphoriaSelection.getFont().deriveFont((float)16));
         euphoriaSelection.setText("Install Euphoria Patches");
@@ -504,13 +575,29 @@ public class NewInstaller extends JFrame {
                 "By default, all added options are disabled and therefore do not change the default look of Complementary.\n" +
                 "Please note that after new releases of Complementary, Euphoria Patches may be a bit behind or\n" +
                 "contain small bugs; in which case you can come back at a later time for an updated version.\n" +
-                "Developed by isuewo and SpacEagle17"
+                "Developed by SpacEagle17"
         );
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridx = 1;
-        gridBagConstraints.gridy = 5;
-        gridBagConstraints.insets = new java.awt.Insets(20, 0, 0, 0);
+        gridBagConstraints.gridy = 6;
+        gridBagConstraints.insets = new java.awt.Insets(10, 0, 0, 0);
         settings.add(euphoriaSelection, gridBagConstraints);
+
+        euphoriaDescription.setFont(euphoriaDescription.getFont().deriveFont((float)14));
+        euphoriaDescription.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
+        euphoriaDescription.setText("<html><center>Euphoria Patches is an add-on for Complementary Shaders, extending it with more optional features and settings. Developped by SpacEagle17</center></html>");
+        gridBagConstraints = new java.awt.GridBagConstraints();
+        gridBagConstraints.gridx = 1;
+        gridBagConstraints.gridy = 7;
+        gridBagConstraints.fill = java.awt.GridBagConstraints.HORIZONTAL;
+        gridBagConstraints.insets = new java.awt.Insets(5, 10, 0, 10);
+        settings.add(euphoriaDescription, gridBagConstraints);
+        euphoriaDescription.setVisible(false);  // Initially hidden
+
+        // Add listener to show/hide description based on checkbox selection
+        euphoriaSelection.addItemListener(e -> {
+            euphoriaDescription.setVisible(e.getStateChange() == ItemEvent.SELECTED);
+        });
 
         pack();
         setLocationRelativeTo(null);
@@ -565,7 +652,15 @@ public class NewInstaller extends JFrame {
         styleIsUnbound = false;
     }
 
+    private Path getModsFolder() {
+        return (installAsMod ? getInstallDir().resolve("mods") : getInstallDir().resolve("iris-reserved").resolve(selectedVersion.name));
+    }
+
     private void installButtonMouseClicked(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_installButtonMouseClicked
+        if (isInternetNotAvailable() && showNetworkErrorDialog("starting installation")) {
+            installButtonMouseClicked(evt);
+            return;
+        }
         installButton.setText("Downloading...");
         installButton.setEnabled(false);
         progressBar.setForeground(new Color(76, 135, 200));
@@ -577,18 +672,35 @@ public class NewInstaller extends JFrame {
             URL loaderVersionUrl = new URL("https://raw.githubusercontent.com/IrisShaders/Iris-Installer-Maven/master/latest-loader");
             String profileName = installAsMod ? "Fabric Loader " : "Iris & Sodium for ";
             VanillaLauncherIntegration.Icon profileIcon = installAsMod ? VanillaLauncherIntegration.Icon.FABRIC : VanillaLauncherIntegration.Icon.IRIS;
-            Path modsFolder0 = installAsMod ? getInstallDir().resolve("mods") : getInstallDir().resolve("iris-reserved").resolve(selectedVersion.name);
+            Path modsFolder0 = getModsFolder();
             String loaderVersion = Main.LOADER_META.getLatestVersion(false).getVersion();
+            if (isInternetNotAvailable()) throw new IOException("Internet connection lost before installing to launcher");
             boolean success = VanillaLauncherIntegration.installToLauncher(this, getVanillaGameDir(), getInstallDir(), modsFolder0, profileName + selectedVersion.name, selectedVersion.name, loaderName, loaderVersion, profileIcon);
             if (!success) {
                 System.out.println("Failed to install to launcher, canceling!");
                 return;
             }
-        } catch (IOException e) {
+        } catch (Exception e) {
             System.out.println("Failed to install version and profile to vanilla launcher!");
             e.printStackTrace();
-            JOptionPane.showMessageDialog(this, "Failed to install to vanilla launcher, please contact the Iris support team via Discord! \nError: " + e, "Failed to install to launcher", JOptionPane.ERROR_MESSAGE);
-            return;
+
+            if (isNetworkError(e) && showNetworkErrorDialog("installing to launcher")) {
+                System.out.println("No internet connection while installing to launcher, retrying...");
+                // User wants to retry
+                installButtonMouseClicked(evt);
+                return;
+            } else {
+                // Other error or user doesn't want to retry
+                JOptionPane.showMessageDialog(this, 
+                    "Failed to install to vanilla launcher, please check your internet connection or contact the Iris support team via Discord! \nError: " + e, 
+                    "Failed to install to launcher", 
+                    JOptionPane.ERROR_MESSAGE);
+                
+                installButton.setEnabled(true);
+                installButton.setText("Install");
+                progressBar.setValue(0);
+                return;
+            }
         }
 
         File storageDir = getStorageDirectory().toFile();
@@ -608,17 +720,7 @@ public class NewInstaller extends JFrame {
                 try {
                     downloaderI.get();
                 } catch (InterruptedException | ExecutionException e) {
-                    System.out.println("Failed to download Iris!");
-                    e.getCause().printStackTrace();
-
-                    String msg = String.format("An error occurred while attempting to download Iris and Sodium, please check your internet connection and try again! \nError: %s",
-                            e.getCause().toString());
-                    installButton.setEnabled(true);
-                    installButton.setText("Download Failed!");
-                    progressBar.setForeground(new Color(204, 0, 0));
-                    progressBar.setValue(100);
-                    JOptionPane.showMessageDialog(this,
-                            msg, "Download Failed!", JOptionPane.ERROR_MESSAGE, null);
+                    handleDownloadError(e, "Iris and Sodium");
                     return;
                 }
 
@@ -629,7 +731,7 @@ public class NewInstaller extends JFrame {
                     installDir.mkdir();
                 }
 
-                File modsFolder = installAsMod ? getInstallDir().resolve("mods").toFile() : getInstallDir().resolve("iris-reserved").resolve(selectedVersion.name).toFile();
+                File modsFolder = getModsFolder().toFile();
                 File[] modsFolderContents = modsFolder.listFiles();
 
                 if (modsFolderContents != null) {
@@ -724,17 +826,7 @@ public class NewInstaller extends JFrame {
 
                         in.close();
                     } catch (IOException e) {
-                        System.out.println("Failed to download Comp!");
-                        e.getCause().printStackTrace();
-
-                        String msg = String.format("An error occurred while attempting to download Complementary files, please check your internet connection and try again! \nError: (Code C1) %s",
-                                e.getCause().toString());
-                        installButton.setEnabled(true);
-                        installButton.setText("Download Failed!");
-                        progressBar.setForeground(new Color(204, 0, 0));
-                        progressBar.setValue(100);
-                        JOptionPane.showMessageDialog(this,
-                                msg, "Download Failed!", JOptionPane.ERROR_MESSAGE, null);
+                        handleDownloadError(e, "Complementary shader files");
                         return;
                     }
 
@@ -746,74 +838,7 @@ public class NewInstaller extends JFrame {
                         compDownURL = "https://github.com/EuphoriaPatches/Complementary-Installer-Files/releases/download/release/" + base64ep;
                     }
 
-                    File shaderDir = new File(installDir, "shaderpacks");
-                    if (!shaderDir.exists() || !shaderDir.isDirectory()) {
-                        shaderDir.mkdir();
-                    }
-                    File shaderLoc = new File(shaderDir, finalShaderName);
-
-                    final Downloader downloaderC = new Downloader(compDownURL, shaderLoc);
-                    downloaderC.addPropertyChangeListener(eventC -> {
-                        if ("progress".equals(eventC.getPropertyName())) {
-                            progressBar.setValue(50 + ((Integer) eventC.getNewValue() ) / 2);
-                        } else if (eventC.getNewValue() == SwingWorker.StateValue.DONE) {
-                            try {
-                                downloaderC.get();
-                                if (euphoriaSelection.isSelected()) decryptEuphoriaPatches(shaderLoc);
-                            } catch (InterruptedException | ExecutionException e) {
-                                System.out.println("Failed to download Comp!");
-                                e.getCause().printStackTrace();
-
-                                String msg = String.format("An error occurred while attempting to download Complementary files, please check your internet connection and try again! \nError: (Code C2) %s",
-                                        e.getCause().toString());
-                                installButton.setEnabled(true);
-                                installButton.setText("Download Failed!");
-                                progressBar.setForeground(new Color(204, 0, 0));
-                                progressBar.setValue(100);
-                                JOptionPane.showMessageDialog(this,
-                                        msg, "Download Failed!", JOptionPane.ERROR_MESSAGE, null);
-                                return;
-                            } catch (Exception e) {
-                                System.out.println("Failed to download Comp! (error kind 2)");
-                                e.printStackTrace();
-                            }
-
-                            File configDir = new File(installDir, "config");
-                            if (!configDir.exists() || !configDir.isDirectory()) {
-                                configDir.mkdir();
-                            }
-                            File ipDir = new File(configDir, "iris.properties");
-                            Properties irisProp = new Properties();
-                            if (ipDir.exists()) {
-                                try (InputStream is = Files.newInputStream(ipDir.toPath())) {
-                                    irisProp.load(is);
-                                } catch (IOException e) {
-                                    System.out.println("Failed to read iris.properties");
-                                }
-                            }
-                            irisProp.setProperty("shaderPack", finalShaderName);
-                            irisProp.setProperty("enableShaders", "true");
-                            try (OutputStream os = Files.newOutputStream(ipDir.toPath())) {
-                                irisProp.store(os, "File written by Comp Installer");
-                            } catch (IOException e) {
-                                System.out.println("Failed to write iris.properties");
-                            }
-
-                            installButton.setText("Completed!");
-                            progressBar.setForeground(new Color(39, 195, 75));
-                            installButton.setEnabled(false);
-                            finishedSuccessfulInstall = true;
-                            System.out.println("Finished Successful Install");
-                            String loaderSt = installAsMod ? "fabric-loader" : "iris-fabric-loader";
-                            String msg = "Successfully installed Iris, Sodium, and "
-                                         +finalShaderName+"."+
-                                         "\nYou can run the game by selecting "+loaderSt+" in your Minecraft launcher.";
-                            JOptionPane.showMessageDialog(this,
-                                    msg, "Installation Complete!", JOptionPane.PLAIN_MESSAGE, new ImageIcon(Objects.requireNonNull(Utils.class.getClassLoader().getResource("green_tick.png"))));
-                            System.exit(0);
-                            return;
-                        }
-                    });
+                    final Downloader downloaderC = getShaderDownloader(installDir, finalShaderName, compDownURL);
 
                     downloaderC.execute();
                 } else {
@@ -828,10 +853,335 @@ public class NewInstaller extends JFrame {
         downloaderI.execute();
     }//GEN-LAST:event_installButtonMouseClicked
 
+    private Downloader getShaderDownloader(File installDir, String finalShaderName, String compDownURL) {
+        File shaderDir = new File(installDir, "shaderpacks");
+        if (!shaderDir.exists() || !shaderDir.isDirectory()) {
+            shaderDir.mkdir();
+        }
+        File shaderLoc = new File(shaderDir, finalShaderName);
+
+        final Downloader downloaderC = new Downloader(compDownURL, shaderLoc);
+        downloaderC.addPropertyChangeListener(eventC -> {
+            if ("progress".equals(eventC.getPropertyName())) {
+                progressBar.setValue(50 + ((Integer) eventC.getNewValue() ) / 2);
+            } else if (eventC.getNewValue() == SwingWorker.StateValue.DONE) {
+                try {
+                    downloaderC.get();
+                    if (isInternetNotAvailable()) {
+                        showNetworkErrorDialog("downloading shader pack");
+                        // User wants to retry
+                        installButtonMouseClicked(null);
+                    }
+                    if (euphoriaSelection.isSelected()) decryptEuphoriaPatches(shaderLoc);
+                } catch (InterruptedException | ExecutionException e) {
+                    handleDownloadError(e, "Complementary Shaders");
+                    return;
+                } catch (Exception e) {
+                    System.out.println("Failed to download Complementary Shaders! (error kind 2)");
+                    e.printStackTrace();
+                    
+                    if (isNetworkError(e) && showNetworkErrorDialog("processing shader pack")) {
+                        // User wants to retry
+                        installButtonMouseClicked(null);
+                    }
+                    return;
+                }
+
+                updateIrisConfiguration(installDir, finalShaderName);
+
+                if (!euphoriaSelection.isSelected()) {
+                    completeInstallation(finalShaderName);
+                } else {
+                    java.util.regex.Pattern epShaderPattern = java.util.regex.Pattern.compile("EuphoriaPatches_(\\d+\\.\\d+\\.\\d+)");
+                    java.util.regex.Matcher epShaderMatcher = epShaderPattern.matcher(finalShaderName);
+
+                    if (!epShaderMatcher.find()) {
+                        System.out.println("Could not extract Euphoria Patches version from shader name: " + finalShaderName);
+                        completeInstallation(finalShaderName);
+                    } else {
+                        String EPshaderVersion = epShaderMatcher.group(1);
+                        System.out.println("EuphoriaPatches version: " + EPshaderVersion);
+                        progressBar.setValue(95); // Keep progress bar at 95% during Modrinth download
+                        getEPViaModrinthAndCompleteInstallation(EPshaderVersion, finalShaderName);
+                    }
+                }
+            }
+        });
+        return downloaderC;
+    }
+
+    private void completeInstallation(String finalShaderName) {
+        // Update UI to show completion
+        installButton.setText("Completed!");
+        progressBar.setForeground(new Color(39, 195, 75));
+        progressBar.setValue(100);
+        installButton.setEnabled(false);
+        System.out.println("Finished Successful Install");
+
+        // Show appropriate completion message
+        String msg;
+        String loaderSt = installAsMod ? "fabric-loader" : "iris-fabric-loader";
+        msg = "Successfully installed Iris, Sodium and " + finalShaderName + ".\n" +
+                "You can run the game by selecting " + loaderSt + " in your Minecraft launcher.";
+        
+        JOptionPane.showMessageDialog(this,
+                msg, "Installation Complete!", JOptionPane.PLAIN_MESSAGE, 
+                new ImageIcon(Objects.requireNonNull(Utils.class.getClassLoader().getResource("green_tick.png"))));
+        System.exit(0);
+    }
+
+    private void updateIrisConfiguration(File installDir, String finalShaderName) {
+        File configDir = new File(installDir, "config");
+        if (!configDir.exists() || !configDir.isDirectory()) {
+            configDir.mkdir();
+        }
+        
+        File ipDir = new File(configDir, "iris.properties");
+        Properties irisProp = new Properties();
+
+        // Update properties
+        irisProp.setProperty("shaderPack", finalShaderName);
+        irisProp.setProperty("enableShaders", "true");
+        
+        // Write properties file
+        try (OutputStream os = Files.newOutputStream(ipDir.toPath())) {
+            irisProp.store(os, "Iris Properties");
+            System.out.println("Successfully wrote iris.properties");
+        } catch (IOException e) {
+            System.out.println("Failed to write iris.properties: " + e.getMessage());
+        }
+
+        // Create installation info file
+        String folderPath = installAsMod ? "mods" : "iris-reserved/" + selectedVersion.name;
+        File installInfoFile = new File(configDir, "installedByCompInstaller.txt");
+        try {
+            String installInfo = "File written by Complementary Shaders Installer - in the " + folderPath + " folder";
+            Files.write(installInfoFile.toPath(), Collections.singletonList(installInfo));
+            System.out.println("Successfully wrote installation info file");
+        } catch (IOException e) {
+            System.out.println("Failed to write installation info file: " + e.getMessage());
+        }
+    }
+
+    private boolean isNetworkError(Exception e) {
+    // Check if exception is directly a network exception
+    if (e instanceof java.net.UnknownHostException || 
+        e instanceof java.net.SocketTimeoutException ||
+        e instanceof java.net.NoRouteToHostException ||
+        e instanceof java.net.ConnectException) {
+        return true;
+    }
+    
+    // Check if it's wrapped in another exception
+    if (e.getCause() instanceof java.net.UnknownHostException || 
+        e.getCause() instanceof java.net.SocketTimeoutException ||
+        e.getCause() instanceof java.net.NoRouteToHostException ||
+        e.getCause() instanceof java.net.ConnectException) {
+        return true;
+    }
+    
+    // General internet connectivity check
+    return isInternetNotAvailable();
+}
+    
+    private void handleDownloadError(Exception e, String downloadType) {
+        System.out.println("Failed to download " + downloadType + "!");
+        e.printStackTrace();
+
+        String msg;
+        if (e.getCause() instanceof java.net.UnknownHostException || 
+            e.getCause() instanceof java.net.SocketTimeoutException) {
+            msg = "Internet connection lost while downloading " + downloadType + ". Please check your connection and try again.";
+        } else {
+            msg = String.format("An error occurred while attempting to download " + downloadType + " files, please check your internet connection and try again! \nError: %s",
+                    e.getCause().toString());
+        }
+        installButton.setEnabled(true);
+        installButton.setText("Download Failed!");
+        progressBar.setForeground(new Color(204, 0, 0));
+        progressBar.setValue(100);
+        JOptionPane.showMessageDialog(this,
+                msg, "Download Failed!", JOptionPane.ERROR_MESSAGE, null);
+    }
+
+    private void getEPViaModrinthAndCompleteInstallation(String requiredVersion, String finalShaderName) {
+        System.out.println("Downloading latest EuphoriaPatcher from Modrinth with required version: " + requiredVersion);
+        File modsFolder = getModsFolder().toFile();
+        
+        if (!modsFolder.exists()) {
+            modsFolder.mkdirs();
+        }
+
+        // Check if EuphoriaPatcher already exists
+        if (checkExistingEuphoriaPatcher(modsFolder, requiredVersion)) {
+            completeInstallation(finalShaderName);
+            return;
+        }
+        
+        try {
+            // Find the appropriate version from Modrinth
+            JSONObject downloadInfo = findEuphoriaPatcherDownload(requiredVersion);
+            
+            if (downloadInfo == null) {
+                System.out.println("Could not find a suitable EuphoriaPatcher version");
+                completeInstallation(finalShaderName);
+                return;
+            }
+            
+            // Download the file
+            downloadEuphoriaPatcher(downloadInfo, modsFolder, finalShaderName);
+            
+        } catch (Exception e) {
+            System.out.println("Error downloading EuphoriaPatcher: " + e.getMessage());
+            e.printStackTrace();
+            completeInstallation(finalShaderName);
+        }
+    }
+
+    private boolean checkExistingEuphoriaPatcher(File modsFolder, String requiredVersion) {
+        File[] existingFiles = modsFolder.listFiles();
+        if (existingFiles != null) {
+            for (File file : existingFiles) {
+                if (file.getName().contains("EuphoriaPatcher") && file.getName().contains(requiredVersion)) {
+                    System.out.println("EuphoriaPatcher version " + requiredVersion + " already exists: " + file.getName());
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private JSONObject findEuphoriaPatcherDownload(String requiredVersion) throws IOException, JSONException {
+        String projectId = "4H6sumDB"; // EuphoriaPatcher project ID on Modrinth
+        String apiUrl = "https://api.modrinth.com/v2/project/" + projectId + "/version";
+        
+        URL url = new URL(apiUrl);
+        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+        connection.setRequestMethod("GET");
+        connection.setConnectTimeout(10000);
+        connection.setReadTimeout(10000);
+        connection.setRequestProperty("User-Agent", "Complementary-Installer");
+        
+        if (connection.getResponseCode() != HttpURLConnection.HTTP_OK) {
+            System.out.println("Failed to fetch from Modrinth API: " + connection.getResponseCode());
+            return null;
+        }
+        
+        // Read the response
+        BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
+        StringBuilder responseBuilder = new StringBuilder();
+        String line;
+        while ((line = reader.readLine()) != null) {
+            responseBuilder.append(line);
+        }
+        reader.close();
+        
+        // Find matching version and file
+        JSONArray versionsArray = new JSONArray(responseBuilder.toString());
+        
+        for (int i = 0; i < versionsArray.length(); i++) {
+            JSONObject version = versionsArray.getJSONObject(i);
+            
+            // Check if this version supports fabric
+            JSONArray loaders = version.optJSONArray("loaders");
+            boolean supportsFabric = false;
+            
+            if (loaders != null) {
+                for (int j = 0; j < loaders.length(); j++) {
+                    if ("fabric".equals(loaders.getString(j))) {
+                        supportsFabric = true;
+                        break;
+                    }
+                }
+            }
+            
+            // Skip if fabric not supported or version doesn't match
+            if (!supportsFabric) continue;
+            
+            String versionNumber = version.getString("version_number");
+            if (requiredVersion != null && !versionNumber.contains(requiredVersion)) continue;
+            
+            // Find a suitable file
+            JSONArray files = version.getJSONArray("files");
+            for (int j = 0; j < files.length(); j++) {
+                JSONObject file = files.getJSONObject(j);
+                String filename = file.getString("filename");
+                
+                if (filename != null) {
+                    JSONObject result = new JSONObject();
+                    result.put("url", file.getString("url"));
+                    result.put("filename", filename);
+                    result.put("version", versionNumber);
+                    return result;
+                }
+            }
+        }
+        
+        return null;
+    }
+
+    private void downloadEuphoriaPatcher(JSONObject downloadInfo, File modsFolder, String finalShaderName) {
+        try {
+            String downloadUrl = downloadInfo.getString("url");
+            String fileName = downloadInfo.getString("filename");
+            String versionNumber = downloadInfo.getString("version");
+            
+            System.out.println("Found version: " + versionNumber + " with download URL: " + downloadUrl);
+            
+            File outputFile = new File(modsFolder, fileName);
+            System.out.println("Downloading to: " + outputFile.getAbsolutePath());
+            
+            final Downloader modrinthDownloader = new Downloader(downloadUrl, outputFile);
+            final String finalVersionNumber = versionNumber;
+            
+            modrinthDownloader.addPropertyChangeListener(event -> {
+                if ("progress".equals(event.getPropertyName())) {
+                    int modrinthProgress = (Integer) event.getNewValue();
+                    int scaledProgress = 95 + (modrinthProgress / 20); // Scale to 95-100%
+                    progressBar.setValue(Math.min(99, scaledProgress));
+                } else if (event.getNewValue() == SwingWorker.StateValue.DONE) {
+                    try {
+                        modrinthDownloader.get();
+                        System.out.println("Successfully downloaded EuphoriaPatcher version: " + finalVersionNumber);
+                        completeInstallation(finalShaderName);
+                    } catch (Exception e) {
+                        System.out.println("Failed to download from Modrinth: " + e.getMessage());
+                        e.printStackTrace();
+                        completeInstallation(finalShaderName);
+                    }
+                }
+            });
+            
+            modrinthDownloader.execute();
+            
+        } catch (Exception e) {
+            System.out.println("Error in download process: " + e.getMessage());
+            e.printStackTrace();
+            completeInstallation(finalShaderName);
+        }
+    }
+
+    public static void openURL(URI uri) {
+        if (!Desktop.isDesktopSupported()) {
+            return;
+        }
+
+        Desktop d = Desktop.getDesktop();
+        if (!d.isSupported(Desktop.Action.BROWSE)) {
+            return;
+        }
+
+        try {
+            d.browse(uri);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
     /**
      * @param args the command line arguments
      */
-    public static void main(String args[]) {
+    public static void main(String[] args) {
         dark = DarkModeDetector.isDarkMode();
 
         System.setProperty("apple.awt.application.appearance", "system");
@@ -863,7 +1213,6 @@ public class NewInstaller extends JFrame {
     private javax.swing.JRadioButton unboundType;
     private javax.swing.JRadioButton reimaginedType;
     private javax.swing.ButtonGroup styleType;
-    private javax.swing.JLabel visualStyleType;
     private javax.swing.JPanel visualStyleContainer;
     private javax.swing.JLabel irisInstallerLabel;
     private javax.swing.JLabel linkLabel;
@@ -871,5 +1220,7 @@ public class NewInstaller extends JFrame {
     private javax.swing.JLabel outdatedText2;
     private javax.swing.JButton advancedSettingsButton;
     private javax.swing.JProgressBar progressBar;
+    private javax.swing.JLabel installationExplanation;
+    private javax.swing.JLabel euphoriaDescription;
     // End of variables declaration//GEN-END:variables
 }

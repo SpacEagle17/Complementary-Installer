@@ -11,9 +11,9 @@ public class Settings extends JFrame {
         super("Complementary Installer Settings");
 
         setIconImage(new ImageIcon(Objects.requireNonNull(Utils.class.getClassLoader().getResource("comp_icon.png"))).getImage());
-        setMaximumSize(new java.awt.Dimension(400, 360));
-        setMinimumSize(new java.awt.Dimension(400, 360));
-        setPreferredSize(new java.awt.Dimension(400, 360));
+        setMaximumSize(new java.awt.Dimension(400, 460));
+        setMinimumSize(new java.awt.Dimension(400, 460));
+        setPreferredSize(new java.awt.Dimension(400, 460));
         setResizable(false);
         getContentPane().setLayout(new java.awt.GridBagLayout());
 
@@ -35,7 +35,7 @@ public class Settings extends JFrame {
         doneButton.putClientProperty( "JButton.buttonType", "roundRect" );
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridx = 1;
-        gridBagConstraints.gridy = 20;
+        gridBagConstraints.gridy = 22;
         gridBagConstraints.insets = new java.awt.Insets(20, 0, 0, 0);
         getContentPane().add(doneButton, gridBagConstraints);
 

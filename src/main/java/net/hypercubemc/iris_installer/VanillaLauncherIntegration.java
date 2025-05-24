@@ -27,7 +27,12 @@ public class VanillaLauncherIntegration {
             // The installation has been canceled via closing the window, most likely.
             return false;
         }
+        if (NewInstaller.isInternetNotAvailable()) throw new IOException("Internet connection lost during launcher integration");
+
         installVersion(vanillaGameDir, modsFolder, gameVersion, loaderName, loaderVersion, launcherType);
+
+        if (NewInstaller.isInternetNotAvailable()) throw new IOException("Internet connection lost during launcher integration");
+
         installProfile(parent, vanillaGameDir, instanceDir, profileName, versionId, icon, launcherType);
         return true;
     }
@@ -60,7 +65,9 @@ public class VanillaLauncherIntegration {
         json.compute("id", (ignored, existing) -> factory.string("iris-" + existing.asString()));
 
         // Add the JVM argument -Diris.installer=true so Iris can detect if the installer is used
-        json.getOrDefault("arguments", Json.array()).asJsonMap().getOrDefault("jvm", Json.array()).asJsonList().add(factory.string("-Dfabric.modsFolder=" + modsFolder.toAbsolutePath().toString()));    }
+        json.getOrDefault("arguments", Json.array()).asJsonMap().getOrDefault("jvm", Json.array()).asJsonList().add(factory.string("-Diris.installer=true"));
+        json.getOrDefault("arguments", Json.array()).asJsonMap().getOrDefault("jvm", Json.array()).asJsonList().add(factory.string("-Dfabric.modsFolder=" + modsFolder.toAbsolutePath().toString()));
+    }
 
     private static void installProfile(Component parent, Path mcDir, Path instanceDir, String profileName, String versionId, Icon icon, ProfileInstaller.LauncherType launcherType) throws IOException {
         Path launcherProfiles = mcDir.resolve(launcherType.profileJsonName);
