@@ -551,12 +551,11 @@ public class NewInstaller extends JFrame {
         
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridx = 1;
-        gridBagConstraints.gridy = 5; // Place it below the radio buttons
+        gridBagConstraints.gridy = 5;
         gridBagConstraints.fill = java.awt.GridBagConstraints.HORIZONTAL;
         gridBagConstraints.insets = new java.awt.Insets(5, 0, 0, 0);
         settings.add(installationExplanation, gridBagConstraints);
 
-        // Update existing radio button listeners to also update the explanation text
         standaloneType.addActionListener(e -> {
             standaloneTypeMouseClicked(null);
             installationExplanation.setText("<html><center>Recommended one-click solution for shader installation</center></html>");
@@ -592,9 +591,8 @@ public class NewInstaller extends JFrame {
         gridBagConstraints.fill = java.awt.GridBagConstraints.HORIZONTAL;
         gridBagConstraints.insets = new java.awt.Insets(5, 10, 0, 10);
         settings.add(euphoriaDescription, gridBagConstraints);
-        euphoriaDescription.setVisible(false);  // Initially hidden
+        euphoriaDescription.setVisible(false);
 
-        // Add listener to show/hide description based on checkbox selection
         euphoriaSelection.addItemListener(e -> {
             euphoriaDescription.setVisible(e.getStateChange() == ItemEvent.SELECTED);
         });
