@@ -11,9 +11,9 @@ public class Settings extends JFrame {
         super("Complementary Installer Settings");
 
         setIconImage(new ImageIcon(Objects.requireNonNull(Utils.class.getClassLoader().getResource("comp_icon.png"))).getImage());
-        setMaximumSize(new java.awt.Dimension(400, 460));
-        setMinimumSize(new java.awt.Dimension(400, 460));
-        setPreferredSize(new java.awt.Dimension(400, 460));
+        setMaximumSize(new java.awt.Dimension(400, 500));
+        setMinimumSize(new java.awt.Dimension(400, 500));
+        setPreferredSize(new java.awt.Dimension(400, 500));
         setResizable(false);
         getContentPane().setLayout(new java.awt.GridBagLayout());
 

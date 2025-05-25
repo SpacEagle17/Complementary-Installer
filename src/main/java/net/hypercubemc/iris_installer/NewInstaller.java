@@ -42,7 +42,7 @@ public class NewInstaller extends JFrame {
 
     private static boolean dark = false;
     private boolean installAsMod;
-    private boolean styleIsUnbound = true;
+    private boolean styleIsUnbound = false;
     private final String outdatedPlaceholder = "Warning: Iris shader loader has ended support for <version>.";
     private final String snapshotPlaceholder = "Warning: <version> is a snapshot build and may";
     private final String BASE_URL = "https://raw.githubusercontent.com/IrisShaders/Iris-Installer-Files/master/";
@@ -326,7 +326,6 @@ public class NewInstaller extends JFrame {
         visualStyleContainer.setLayout(new java.awt.BorderLayout(10, 0));
             styleType.add(unboundType);
             unboundType.setFont(unboundType.getFont().deriveFont((float)16));
-            unboundType.setSelected(true);
             unboundType.setText("Unbound Style");
             unboundType.setToolTipText("");
             unboundType.addMouseListener(new java.awt.event.MouseAdapter() {
@@ -338,6 +337,7 @@ public class NewInstaller extends JFrame {
 
             styleType.add(reimaginedType);
             reimaginedType.setFont(reimaginedType.getFont().deriveFont((float)16));
+            reimaginedType.setSelected(true);
             reimaginedType.setText("Reimagined Style");
             reimaginedType.setToolTipText("");
             reimaginedType.addMouseListener(new java.awt.event.MouseAdapter() {
@@ -519,7 +519,7 @@ public class NewInstaller extends JFrame {
             standaloneType.setFont(standaloneType.getFont().deriveFont((float)16));
             standaloneType.setSelected(true);
             standaloneType.setText("Iris Only");
-            standaloneType.setToolTipText("Installs Iris + Sodium by itself, and adds Complementary.");
+            standaloneType.setToolTipText("");
             standaloneType.addMouseListener(new java.awt.event.MouseAdapter() {
                 public void mouseReleased(java.awt.event.MouseEvent evt) {
                     standaloneTypeMouseClicked(evt);
@@ -530,7 +530,7 @@ public class NewInstaller extends JFrame {
             installType.add(fabricType);
             fabricType.setFont(fabricType.getFont().deriveFont((float)16));
             fabricType.setText("Iris + Fabric");
-            fabricType.setToolTipText("Installs Iris + Sodium on an installation of Fabric Loader, and adds Complementary.");
+            fabricType.setToolTipText("");
             fabricType.addMouseListener(new java.awt.event.MouseAdapter() {
                 public void mouseReleased(java.awt.event.MouseEvent evt) {
                     fabricTypeMouseClicked(evt);
@@ -544,9 +544,9 @@ public class NewInstaller extends JFrame {
         settings.add(installationTypesContainer, gridBagConstraints);
 
         installationExplanation = new javax.swing.JLabel();
-        installationExplanation.setFont(installationExplanation.getFont().deriveFont((float)16));
+        installationExplanation.setFont(installationExplanation.getFont().deriveFont((float)13));
         installationExplanation.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
-        installationExplanation.setText("<html><center>Recommended one-click solution for shader installation</center></html>");
+        installationExplanation.setText("<html><center>Installs the Iris shader-loader to a reserved location to avoid unexpected problems.</center></html>");
         installationExplanation.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
         
         gridBagConstraints = new java.awt.GridBagConstraints();
@@ -558,33 +558,29 @@ public class NewInstaller extends JFrame {
 
         standaloneType.addActionListener(e -> {
             standaloneTypeMouseClicked(null);
-            installationExplanation.setText("<html><center>Recommended one-click solution for shader installation</center></html>");
+            installationExplanation.setText("<html><center>Installs the Iris shader-loader to a reserved location to avoid unexpected problems.</center></html>");
+            euphoriaDescription.setVisible(false);
         });
         
         fabricType.addActionListener(e -> {
             fabricTypeMouseClicked(null);
-            installationExplanation.setText("<html><center>Choose this if you want to use other Fabric mods alongside shaders</center></html>");
+            installationExplanation.setText("<html><center>Installs Iris to the mods folder with a Fabric installation. This allows adding more Fabric mods, but it might cause a problem if there are already existing mods in your mods folder.</center></html>");
+            euphoriaDescription.setVisible(false);
         });
 
         euphoriaSelection.setSelected(false);
         euphoriaSelection.setFont(euphoriaSelection.getFont().deriveFont((float)16));
         euphoriaSelection.setText("Install Euphoria Patches");
-        euphoriaSelection.setToolTipText(
-                "Euphoria Patches is an add-on for Complementary that adds many optional features and settings.\n" +
-                "By default, all added options are disabled and therefore do not change the default look of Complementary.\n" +
-                "Please note that after new releases of Complementary, Euphoria Patches may be a bit behind or\n" +
-                "contain small bugs; in which case you can come back at a later time for an updated version.\n" +
-                "Developed by SpacEagle17"
-        );
+        euphoriaSelection.setToolTipText("");
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridx = 1;
         gridBagConstraints.gridy = 6;
         gridBagConstraints.insets = new java.awt.Insets(10, 0, 0, 0);
         settings.add(euphoriaSelection, gridBagConstraints);
 
-        euphoriaDescription.setFont(euphoriaDescription.getFont().deriveFont((float)14));
+        euphoriaDescription.setFont(euphoriaDescription.getFont().deriveFont((float)13));
         euphoriaDescription.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
-        euphoriaDescription.setText("<html><center>Euphoria Patches is an add-on for Complementary Shaders, extending it with more optional features and settings. Developped by SpacEagle17</center></html>");
+        euphoriaDescription.setText("<html><center>Euphoria Patches is an add-on for Complementary that extends it with many optional features and settings while not changing the default look of Complementary. It may be a bit behind in updates (usually not) or contain small bugs, in which case you can come back later for an updated version. Developed by SpacEagle17</center></html>");
         gridBagConstraints = new java.awt.GridBagConstraints();
         gridBagConstraints.gridx = 1;
         gridBagConstraints.gridy = 7;
@@ -595,6 +591,7 @@ public class NewInstaller extends JFrame {
 
         euphoriaSelection.addItemListener(e -> {
             euphoriaDescription.setVisible(e.getStateChange() == ItemEvent.SELECTED);
+            installationExplanation.setText("");
         });
 
         pack();
