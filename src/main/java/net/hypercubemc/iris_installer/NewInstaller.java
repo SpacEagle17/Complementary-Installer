@@ -353,6 +353,7 @@ public class NewInstaller extends JFrame {
         getContentPane().add(visualStyleContainer, gridBagConstraints);
 
         linkLabel.setText("<html><a href='https://www.complementary.dev/shaders/#style-section'>What's the difference?</a></html>");
+        linkLabel.setFont(linkLabel.getFont().deriveFont((float)14));
         linkLabel.addMouseListener(new java.awt.event.MouseAdapter() {
             public void mouseReleased(java.awt.event.MouseEvent evt) {
                 openURL(URI.create("https://www.complementary.dev/shaders/#style-section"));
