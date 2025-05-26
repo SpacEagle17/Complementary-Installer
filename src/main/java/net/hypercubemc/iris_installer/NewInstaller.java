@@ -920,8 +920,6 @@ public class NewInstaller extends JFrame {
             System.out.println("Found EuphoriaPatcher version: " + epVersion);
             System.out.println("Expected EP file: " + epFile.getAbsolutePath());
 
-            System.out.println(finalShaderName);
-
             // Check if EuphoriaPatcher already exists
             if (epFile.exists()) {
                 System.out.println("EuphoriaPatcher already exists: " + epFilename);
