@@ -20,9 +20,6 @@ import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
-import javax.crypto.Cipher;
-import javax.crypto.spec.IvParameterSpec;
-import javax.crypto.spec.SecretKeySpec;
 import javax.swing.*;
 
 import net.fabricmc.installer.Main;
@@ -215,21 +212,6 @@ public class NewInstaller extends JFrame {
             e.printStackTrace();
             return false;
         }
-    }
-
-    public void decryptEuphoriaPatches(File file) throws Exception {
-        SecretKeySpec key = new SecretKeySpec(new byte[]{-93, 70, -5, -49, -51, -113, 103, 109, 69, 18, -13, 63, -106, -18, 115, 6}, "AES");
-        IvParameterSpec iv = new IvParameterSpec(new byte[]{-91, -62, 93, 55, 58, 21, -60, -82, 82, -54, 87, -96, -88, 112, 45, -105});
-
-        Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
-        cipher.init(Cipher.DECRYPT_MODE, key, iv);
-
-        byte[] fileBytes = Files.readAllBytes(file.toPath());
-        fileBytes = cipher.doFinal(fileBytes);
-
-        System.out.println("Decrypting Euphoria Patches...");
-
-        Files.write(file.toPath(), fileBytes);
     }
 
     public static boolean isInternetNotAvailable() {
