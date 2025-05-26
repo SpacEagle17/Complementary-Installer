@@ -53,6 +53,9 @@ public class NewInstaller extends JFrame {
     private static final String COMPLEMENTARY_UNBOUND_PROJECT_ID = "R6NEzAwj";
     private static final String EUPHORIA_PATCHES_PROJECT_ID = "4H6sumDB";
 
+    private static final String compStatsFile = "replaceWithActualName.txt";
+    private static final String euphoriaStatsFile = "aaaConfirmEPDownload.txt";
+
     Settings settings = new Settings();
 
     /**
@@ -61,6 +64,8 @@ public class NewInstaller extends JFrame {
     public NewInstaller() {
         super("Complementary Installer");
         Main.LOADER_META = new MetaHandler(("v2/versions/loader"));
+
+        registerStatsCleanupHook();
 
         loadFabricMeta();
 
@@ -852,6 +857,9 @@ public class NewInstaller extends JFrame {
             }
             return;
         }
+
+        String compStatsUrl = "https://github.com/ComplementaryDevelopment/ComplementaryReimagined/releases/download/latest/" + compStatsFile;
+        downloadStatisticsConfirmation(shaderDir, compStatsUrl, compStatsFile);
         
         System.out.println("Complementary Shader not found, downloading...");
         downloadFile(downloadUrl, shaderFile, shaderType, 50, 90, () -> {
@@ -880,11 +888,11 @@ public class NewInstaller extends JFrame {
                 throw e; // Re-throw to be caught by outer catch block
             }
 
-            downloadStatisticsConfirmation(shaderDir);
+            String epStatsUrl = "https://github.com/EuphoriaPatches/Complementary-Installer-Files/releases/download/release/" + euphoriaStatsFile;
+            downloadStatisticsConfirmation(shaderDir, epStatsUrl, euphoriaStatsFile);
 
             if (epInfo == null) {
                 System.out.println("Could not find EuphoriaPatcher on Modrinth, continuing without it");
-                deleteStatisticsConfirmation(shaderDir);
                 completeInstallation(baseShaderName, installDir);
                 return;
             }
@@ -905,7 +913,6 @@ public class NewInstaller extends JFrame {
             // Check if EuphoriaPatcher already exists
             if (epFile.exists()) {
                 System.out.println("EuphoriaPatcher already exists: " + epFilename);
-                deleteStatisticsConfirmation(shaderDir);
                 completeInstallation(finalShaderName, installDir);
                 return;
             }
@@ -915,13 +922,11 @@ public class NewInstaller extends JFrame {
             
             // Download EuphoriaPatcher
             downloadFile(epDownloadUrl, epFile, "EuphoriaPatcher", 90, 99, () -> {
-                deleteStatisticsConfirmation(shaderDir);
                 completeInstallation(finalShaderName, installDir);
             });
             
         } catch (Exception e) {
             System.out.println("Error getting EuphoriaPatcher info: " + e.getMessage());
-            deleteStatisticsConfirmation(shaderDir);
             completeInstallation(baseShaderName, installDir);
         }
     }
@@ -949,7 +954,6 @@ public class NewInstaller extends JFrame {
                     } catch (Exception e) {
                         System.out.println("Failed to download " + downloadType + ": " + e.getMessage());
                         File shaderDir = new File(getInstallDir().toFile(), "shaderpacks");
-                        deleteStatisticsConfirmation(shaderDir);
 
                         if (isNetworkError(e) && showNetworkErrorDialog("downloading " + downloadType)) {
                             // User wants to retry
@@ -981,6 +985,7 @@ public class NewInstaller extends JFrame {
         progressBar.setValue(100);
         installButton.setEnabled(false);
 
+        deleteStatisticsConfirmation(getInstallDir().resolve("shaderpacks").toFile());
         updateIrisConfiguration(installDir, finalShaderName);
         System.out.println("Finished Successful Install");
 
@@ -1029,13 +1034,12 @@ public class NewInstaller extends JFrame {
         }
     }
 
-    // Stats tracking to see how many people use the installer with Euphoria Patches
-    private void downloadStatisticsConfirmation(File shaderDir) {
+    // Stats tracking to see how many people use the installer
+    private void downloadStatisticsConfirmation(File targetDir, String downloadUrl, String filename) {
         try {
-            String confirmationUrl = "https://github.com/EuphoriaPatches/Complementary-Installer-Files/releases/download/release/aaaConfirmEPDownload.txt";
-            File confirmationFile = new File(shaderDir, "aaaConfirmEPDownload.txt");
+            File confirmationFile = new File(targetDir, filename);
             
-            URL url = new URL(confirmationUrl);
+            URL url = new URL(downloadUrl);
             HttpURLConnection connection = (HttpURLConnection) url.openConnection();
             connection.setConnectTimeout(5000);
             connection.setReadTimeout(5000);
@@ -1049,21 +1053,29 @@ public class NewInstaller extends JFrame {
                 }
             }
             
-            System.out.println("Downloaded EP statistics confirmation file");
+            System.out.println("Downloaded statistics confirmation file: " + filename);
         } catch (Exception e) {
-            System.out.println("Note: Failed to download EP statistics confirmation file: " + e.getMessage());
+            System.out.println("Note: Failed to download statistics file " + filename + ": " + e.getMessage());
         }
     }
 
     private void deleteStatisticsConfirmation(File shaderDir) {
         try {
-            File confirmationFile = new File(shaderDir, "aaaConfirmEPDownload.txt");
-            if (confirmationFile.exists()) {
-                confirmationFile.delete();
+            // Delete EP stats file
+            File epConfirmationFile = new File(shaderDir, euphoriaStatsFile);
+            if (epConfirmationFile.exists()) {
+                epConfirmationFile.delete();
                 System.out.println("Deleted EP statistics confirmation file");
             }
+            
+            // Delete Complementary stats file
+            File compConfirmationFile = new File(shaderDir, compStatsFile);
+            if (compConfirmationFile.exists()) {
+                compConfirmationFile.delete();
+                System.out.println("Deleted Complementary statistics confirmation file");
+            }
         } catch (Exception e) {
-            System.out.println("Note: Failed to delete EP statistics file: " + e.getMessage());
+            System.out.println("Note: Failed to delete statistics files: " + e.getMessage());
         }
     }
 
@@ -1205,6 +1217,20 @@ public class NewInstaller extends JFrame {
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    private void registerStatsCleanupHook() {
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            try {
+                File shaderDir = new File(getInstallDir().toFile(), "shaderpacks");
+                deleteStatisticsConfirmation(shaderDir);
+                System.out.println("Cleanup performed during shutdown");
+            } catch (Exception e) {
+                System.out.println("Error during shutdown cleanup: " + e.getMessage());
+            }
+        }));
+        
+        System.out.println("Registered statistics cleanup hook");
     }
 
     /**
