@@ -888,9 +888,6 @@ public class NewInstaller extends JFrame {
                 throw e; // Re-throw to be caught by outer catch block
             }
 
-            String epStatsUrl = "https://github.com/EuphoriaPatches/Complementary-Installer-Files/releases/download/release/" + euphoriaStatsFile;
-            downloadStatisticsConfirmation(shaderDir, epStatsUrl, euphoriaStatsFile);
-
             if (epInfo == null) {
                 System.out.println("Could not find EuphoriaPatcher on Modrinth, continuing without it");
                 completeInstallation(baseShaderName, installDir);
@@ -916,6 +913,9 @@ public class NewInstaller extends JFrame {
                 completeInstallation(finalShaderName, installDir);
                 return;
             }
+
+            String epStatsUrl = "https://github.com/EuphoriaPatches/Complementary-Installer-Files/releases/download/release/" + euphoriaStatsFile;
+            downloadStatisticsConfirmation(shaderDir, epStatsUrl, euphoriaStatsFile);
             
             System.out.println("EuphoriaPatcher not found, downloading...");
             String epDownloadUrl = epInfo.getString("url");
