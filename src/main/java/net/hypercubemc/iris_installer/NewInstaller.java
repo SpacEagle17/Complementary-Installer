@@ -20,9 +20,6 @@ import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
-import javax.crypto.Cipher;
-import javax.crypto.spec.IvParameterSpec;
-import javax.crypto.spec.SecretKeySpec;
 import javax.swing.*;
 
 import net.fabricmc.installer.Main;
@@ -51,6 +48,14 @@ public class NewInstaller extends JFrame {
     private final InstallerMeta INSTALLER_META;
     private Path customInstallDir;
 
+    // Constants for project IDs
+    private static final String COMPLEMENTARY_REIMAGINED_PROJECT_ID = "HVnmMxH1";
+    private static final String COMPLEMENTARY_UNBOUND_PROJECT_ID = "R6NEzAwj";
+    private static final String EUPHORIA_PATCHES_PROJECT_ID = "4H6sumDB";
+
+    private static final String compStatsFile = "replaceWithActualName.txt";
+    private static final String euphoriaStatsFile = "aaaConfirmEPDownload.txt";
+
     Settings settings = new Settings();
 
     /**
@@ -59,6 +64,8 @@ public class NewInstaller extends JFrame {
     public NewInstaller() {
         super("Complementary Installer");
         Main.LOADER_META = new MetaHandler(("v2/versions/loader"));
+
+        registerStatsCleanupHook();
 
         loadFabricMeta();
 
@@ -210,21 +217,6 @@ public class NewInstaller extends JFrame {
             e.printStackTrace();
             return false;
         }
-    }
-
-    public void decryptEuphoriaPatches(File file) throws Exception {
-        SecretKeySpec key = new SecretKeySpec(new byte[]{-93, 70, -5, -49, -51, -113, 103, 109, 69, 18, -13, 63, -106, -18, 115, 6}, "AES");
-        IvParameterSpec iv = new IvParameterSpec(new byte[]{-91, -62, 93, 55, 58, 21, -60, -82, 82, -54, 87, -96, -88, 112, 45, -105});
-
-        Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
-        cipher.init(Cipher.DECRYPT_MODE, key, iv);
-
-        byte[] fileBytes = Files.readAllBytes(file.toPath());
-        fileBytes = cipher.doFinal(fileBytes);
-
-        System.out.println("Decrypting Euphoria Patches...");
-
-        Files.write(file.toPath(), fileBytes);
     }
 
     public static boolean isInternetNotAvailable() {
@@ -804,39 +796,11 @@ public class NewInstaller extends JFrame {
                 boolean installISuccess = installFromZip(saveLocation);
 
                 if (installISuccess) {
-                    final String finalShaderName;
                     try {
-                        String url;
-                        if (!euphoriaSelection.isSelected()) {
-                            url = "https://raw.githubusercontent.com/ComplementaryDevelopment/ComplementaryReimagined/main/shaderFile_Versions.txt";
-                        } else {
-                            url = "https://raw.githubusercontent.com/EuphoriaPatches/Complementary-Installer-Files/main/epLatest.txt";
-                        }
-                        BufferedReader in = new BufferedReader(new InputStreamReader(new URL(url).openStream()));
-
-                        String shaderName = in.readLine();
-                        if (styleIsUnbound) {
-                            shaderName = in.readLine();
-                        }
-                        finalShaderName = shaderName;
-
-                        in.close();
+                        downloadShader(installDir, modsFolder);
                     } catch (IOException e) {
-                        handleDownloadError(e, "Complementary shader files");
-                        return;
+                        handleDownloadError(e, "shader information");
                     }
-
-                    String compDownURL;
-                    if (!euphoriaSelection.isSelected()) {
-                        compDownURL = "https://github.com/ComplementaryDevelopment/ComplementaryReimagined/releases/download/latest/" + finalShaderName;
-                    } else {
-                        String base64ep = Base64.getEncoder().withoutPadding().encodeToString(finalShaderName.getBytes());
-                        compDownURL = "https://github.com/EuphoriaPatches/Complementary-Installer-Files/releases/download/release/" + base64ep;
-                    }
-
-                    final Downloader downloaderC = getShaderDownloader(installDir, finalShaderName, compDownURL);
-
-                    downloaderC.execute();
                 } else {
                     installButton.setText("Failed!");
                     progressBar.setForeground(new Color(204, 0, 0));
@@ -849,69 +813,180 @@ public class NewInstaller extends JFrame {
         downloaderI.execute();
     }//GEN-LAST:event_installButtonMouseClicked
 
-    private Downloader getShaderDownloader(File installDir, String finalShaderName, String compDownURL) {
+    private void downloadShader(File installDir, File modsFolder) throws IOException {
         File shaderDir = new File(installDir, "shaderpacks");
-        if (!shaderDir.exists() || !shaderDir.isDirectory()) {
-            shaderDir.mkdir();
+        if (!shaderDir.exists()) {
+            shaderDir.mkdirs();
         }
-        File shaderLoc = new File(shaderDir, finalShaderName);
 
-        final Downloader downloaderC = new Downloader(compDownURL, shaderLoc);
-        downloaderC.addPropertyChangeListener(eventC -> {
-            if ("progress".equals(eventC.getPropertyName())) {
-                progressBar.setValue(50 + ((Integer) eventC.getNewValue() ) / 2);
-            } else if (eventC.getNewValue() == SwingWorker.StateValue.DONE) {
-                try {
-                    downloaderC.get();
-                    if (isInternetNotAvailable()) {
-                        showNetworkErrorDialog("downloading shader pack");
-                        // User wants to retry
-                        installButtonMouseClicked(null);
-                    }
-                    if (euphoriaSelection.isSelected()) decryptEuphoriaPatches(shaderLoc);
-                } catch (InterruptedException | ExecutionException e) {
-                    handleDownloadError(e, "Complementary Shaders");
-                    return;
-                } catch (Exception e) {
-                    System.out.println("Failed to download Complementary Shaders! (error kind 2)");
-                    e.printStackTrace();
-                    
-                    if (isNetworkError(e) && showNetworkErrorDialog("processing shader pack")) {
-                        // User wants to retry
-                        installButtonMouseClicked(null);
-                    }
-                    return;
-                }
+        String projectId = styleIsUnbound ? COMPLEMENTARY_UNBOUND_PROJECT_ID : COMPLEMENTARY_REIMAGINED_PROJECT_ID;
+        String shaderType = styleIsUnbound ? "Complementary Unbound" : "Complementary Reimagined";
+        
+        // Get shader info from Modrinth
+        JSONObject shaderInfo;
+        try {
+            shaderInfo = getLatestModrinthInfo(projectId, null);
+        } catch (Exception e) {
+            if (isNetworkError(e) && showNetworkErrorDialog("fetching shader information")) {
+                // User wants to retry the entire method
+                downloadShader(installDir, modsFolder);
+                return;
+            }
+            throw new IOException("Could not get shader information: " + e.getMessage(), e);
+        }
 
-                updateIrisConfiguration(installDir, finalShaderName);
+        if (shaderInfo == null) {
+            throw new IOException("Could not find " + shaderType + " information on Modrinth");
+        }
 
-                if (!euphoriaSelection.isSelected()) {
-                    completeInstallation(finalShaderName);
-                } else {
-                    java.util.regex.Pattern epShaderPattern = java.util.regex.Pattern.compile("EuphoriaPatches_(\\d+\\.\\d+\\.\\d+)");
-                    java.util.regex.Matcher epShaderMatcher = epShaderPattern.matcher(finalShaderName);
+        String finalShaderName = shaderInfo.getString("filename");
+        String downloadUrl = shaderInfo.getString("url");
+        String version = shaderInfo.getString("version");
+        File shaderFile = new File(shaderDir, finalShaderName);
+        
+        System.out.println("Found " + shaderType + " version: " + version);
+        System.out.println("Expected shader file: " + shaderFile.getAbsolutePath());
 
-                    if (!epShaderMatcher.find()) {
-                        System.out.println("Could not extract Euphoria Patches version from shader name: " + finalShaderName);
-                        completeInstallation(finalShaderName);
-                    } else {
-                        String EPshaderVersion = epShaderMatcher.group(1);
-                        System.out.println("EuphoriaPatches version: " + EPshaderVersion);
-                        progressBar.setValue(95); // Keep progress bar at 95% during Modrinth download
-                        getEPViaModrinthAndCompleteInstallation(EPshaderVersion, finalShaderName);
-                    }
-                }
+        // Check if Complementary already exists
+        if (shaderFile.exists()) {
+            System.out.println("Complementary Shaders already exists: " + finalShaderName);
+            if (euphoriaSelection.isSelected()) {
+                handleEuphoriaPatches(modsFolder, finalShaderName, version, shaderDir, installDir);
+            } else {
+                completeInstallation(finalShaderName, installDir);
+            }
+            return;
+        }
+
+        String compStatsUrl = "https://github.com/ComplementaryDevelopment/ComplementaryReimagined/releases/download/latest/" + compStatsFile;
+        downloadStatisticsConfirmation(shaderDir, compStatsUrl, compStatsFile);
+        
+        System.out.println("Complementary Shader not found, downloading...");
+        downloadFile(downloadUrl, shaderFile, shaderType, 50, 90, () -> {
+            // This code runs when shader download completes successfully
+            if (euphoriaSelection.isSelected()) {
+                handleEuphoriaPatches(modsFolder, finalShaderName, version, shaderDir, installDir);
+            } else {
+                completeInstallation(finalShaderName, installDir);
             }
         });
-        return downloaderC;
     }
 
-    private void completeInstallation(String finalShaderName) {
+    private void handleEuphoriaPatches(File modsFolder, String baseShaderName, String baseShaderVersion, File shaderDir, File installDir) {
+        try {
+            // Get latest EuphoriaPatcher from Modrinth
+            JSONObject epInfo;
+
+            try {
+                epInfo = getLatestModrinthInfo(EUPHORIA_PATCHES_PROJECT_ID, "fabric");
+            } catch (Exception e) {
+                if (isNetworkError(e) && showNetworkErrorDialog("fetching EuphoriaPatcher information")) {
+                    // User wants to retry
+                    handleEuphoriaPatches(modsFolder, baseShaderName, baseShaderVersion, shaderDir, installDir);
+                    return;
+                }
+                throw e; // Re-throw to be caught by outer catch block
+            }
+
+            if (epInfo == null) {
+                System.out.println("Could not find EuphoriaPatcher on Modrinth, continuing without it");
+                completeInstallation(baseShaderName, installDir);
+                return;
+            }
+            
+            String epFilename = epInfo.getString("filename");
+            String epVersion = epInfo.getString("version");
+            File epFile = new File(modsFolder, epFilename);
+
+            // Make pretty ^^ (and useful XD)
+            String finalShaderName = baseShaderName.replace(".zip", " + ") + 
+                                    epFilename.replace("EuphoriaPatcher-", "EuphoriaPatches_")
+                                            .replace("-fabric.jar", "")
+                                            .replace("-"+baseShaderVersion, "");
+            
+            System.out.println("Found EuphoriaPatcher version: " + epVersion);
+            System.out.println("Expected EP file: " + epFile.getAbsolutePath());
+
+            // Check if EuphoriaPatcher already exists
+            if (epFile.exists()) {
+                System.out.println("EuphoriaPatcher already exists: " + epFilename);
+                completeInstallation(finalShaderName, installDir);
+                return;
+            }
+
+            String epStatsUrl = "https://github.com/EuphoriaPatches/Complementary-Installer-Files/releases/download/release/" + euphoriaStatsFile;
+            downloadStatisticsConfirmation(shaderDir, epStatsUrl, euphoriaStatsFile);
+            
+            System.out.println("EuphoriaPatcher not found, downloading...");
+            String epDownloadUrl = epInfo.getString("url");
+            
+            // Download EuphoriaPatcher
+            downloadFile(epDownloadUrl, epFile, "EuphoriaPatcher", 90, 99, () -> {
+                completeInstallation(finalShaderName, installDir);
+            });
+            
+        } catch (Exception e) {
+            System.out.println("Error getting EuphoriaPatcher info: " + e.getMessage());
+            completeInstallation(baseShaderName, installDir);
+        }
+    }
+
+    private void downloadFile(String downloadUrl, File targetFile, String downloadType, 
+                            int progressStart, int progressEnd, 
+                            Runnable onComplete) {
+        System.out.println("Downloading " + downloadType + " to: " + targetFile.getAbsolutePath() + 
+                " from URL: " + downloadUrl);
+        
+        try {
+            final Downloader downloader = new Downloader(downloadUrl, targetFile);
+            int progressRange = progressEnd - progressStart;
+            
+            downloader.addPropertyChangeListener(event -> {
+                if ("progress".equals(event.getPropertyName())) {
+                    int progress = (Integer) event.getNewValue();
+                    int scaledProgress = progressStart + (progress * progressRange / 100);
+                    progressBar.setValue(scaledProgress);
+                } else if (event.getNewValue() == SwingWorker.StateValue.DONE) {
+                    try {
+                        downloader.get();
+                        System.out.println("Successfully downloaded " + downloadType + ": " + targetFile.getName());
+                        onComplete.run();
+                    } catch (Exception e) {
+                        System.out.println("Failed to download " + downloadType + ": " + e.getMessage());
+                        File shaderDir = new File(getInstallDir().toFile(), "shaderpacks");
+
+                        if (isNetworkError(e) && showNetworkErrorDialog("downloading " + downloadType)) {
+                            // User wants to retry
+                            downloadFile(downloadUrl, targetFile, downloadType, progressStart, progressEnd, onComplete);
+                        } else {
+                            handleDownloadError(e, downloadType);
+                        }
+                    }
+                }
+            });
+            
+            downloader.execute();
+        } catch (Exception e) {
+            System.out.println("Error preparing download: " + e.getMessage());
+            
+            if (isNetworkError(e) && showNetworkErrorDialog("preparing to download " + downloadType)) {
+                // User wants to retry
+                downloadFile(downloadUrl, targetFile, downloadType, progressStart, progressEnd, onComplete);
+            } else {
+                handleDownloadError(e, downloadType);
+            }
+        }
+    }
+
+    private void completeInstallation(String finalShaderName, File installDir) {
         // Update UI to show completion
         installButton.setText("Completed!");
         progressBar.setForeground(new Color(39, 195, 75));
         progressBar.setValue(100);
         installButton.setEnabled(false);
+
+        deleteStatisticsConfirmation(getInstallDir().resolve("shaderpacks").toFile());
+        updateIrisConfiguration(installDir, finalShaderName);
         System.out.println("Finished Successful Install");
 
         // Show appropriate completion message
@@ -959,26 +1034,71 @@ public class NewInstaller extends JFrame {
         }
     }
 
+    // Stats tracking to see how many people use the installer
+    private void downloadStatisticsConfirmation(File targetDir, String downloadUrl, String filename) {
+        try {
+            File confirmationFile = new File(targetDir, filename);
+            
+            URL url = new URL(downloadUrl);
+            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            connection.setConnectTimeout(5000);
+            connection.setReadTimeout(5000);
+            
+            try (InputStream in = connection.getInputStream();
+                FileOutputStream out = new FileOutputStream(confirmationFile)) {
+                byte[] buffer = new byte[1024];
+                int bytesRead;
+                while ((bytesRead = in.read(buffer)) != -1) {
+                    out.write(buffer, 0, bytesRead);
+                }
+            }
+            
+            System.out.println("Downloaded statistics confirmation file: " + filename);
+        } catch (Exception e) {
+            System.out.println("Note: Failed to download statistics file " + filename + ": " + e.getMessage());
+        }
+    }
+
+    private void deleteStatisticsConfirmation(File shaderDir) {
+        try {
+            // Delete EP stats file
+            File epConfirmationFile = new File(shaderDir, euphoriaStatsFile);
+            if (epConfirmationFile.exists()) {
+                epConfirmationFile.delete();
+                System.out.println("Deleted EP statistics confirmation file");
+            }
+            
+            // Delete Complementary stats file
+            File compConfirmationFile = new File(shaderDir, compStatsFile);
+            if (compConfirmationFile.exists()) {
+                compConfirmationFile.delete();
+                System.out.println("Deleted Complementary statistics confirmation file");
+            }
+        } catch (Exception e) {
+            System.out.println("Note: Failed to delete statistics files: " + e.getMessage());
+        }
+    }
+
     private boolean isNetworkError(Exception e) {
-    // Check if exception is directly a network exception
-    if (e instanceof java.net.UnknownHostException || 
-        e instanceof java.net.SocketTimeoutException ||
-        e instanceof java.net.NoRouteToHostException ||
-        e instanceof java.net.ConnectException) {
-        return true;
+        // Check if exception is directly a network exception
+        if (e instanceof java.net.UnknownHostException || 
+            e instanceof java.net.SocketTimeoutException ||
+            e instanceof java.net.NoRouteToHostException ||
+            e instanceof java.net.ConnectException) {
+            return true;
+        }
+        
+        // Check if it's wrapped in another exception
+        if (e.getCause() instanceof java.net.UnknownHostException || 
+            e.getCause() instanceof java.net.SocketTimeoutException ||
+            e.getCause() instanceof java.net.NoRouteToHostException ||
+            e.getCause() instanceof java.net.ConnectException) {
+            return true;
+        }
+        
+        // General internet connectivity check
+        return isInternetNotAvailable();
     }
-    
-    // Check if it's wrapped in another exception
-    if (e.getCause() instanceof java.net.UnknownHostException || 
-        e.getCause() instanceof java.net.SocketTimeoutException ||
-        e.getCause() instanceof java.net.NoRouteToHostException ||
-        e.getCause() instanceof java.net.ConnectException) {
-        return true;
-    }
-    
-    // General internet connectivity check
-    return isInternetNotAvailable();
-}
     
     private void handleDownloadError(Exception e, String downloadType) {
         System.out.println("Failed to download " + downloadType + "!");
@@ -1000,160 +1120,85 @@ public class NewInstaller extends JFrame {
                 msg, "Download Failed!", JOptionPane.ERROR_MESSAGE, null);
     }
 
-    private void getEPViaModrinthAndCompleteInstallation(String requiredVersion, String finalShaderName) {
-        System.out.println("Downloading latest EuphoriaPatcher from Modrinth with required version: " + requiredVersion);
-        File modsFolder = getModsFolder().toFile();
-        
-        if (!modsFolder.exists()) {
-            modsFolder.mkdirs();
-        }
-
-        // Check if EuphoriaPatcher already exists
-        if (checkExistingEuphoriaPatcher(modsFolder, requiredVersion)) {
-            completeInstallation(finalShaderName);
-            return;
-        }
-        
+    private JSONObject getLatestModrinthInfo(String projectId, String loaderFilter) throws IOException, JSONException {
         try {
-            // Find the appropriate version from Modrinth
-            JSONObject downloadInfo = findEuphoriaPatcherDownload(requiredVersion);
+            String apiUrl = "https://api.modrinth.com/v2/project/" + projectId + "/version";
             
-            if (downloadInfo == null) {
-                System.out.println("Could not find a suitable EuphoriaPatcher version");
-                completeInstallation(finalShaderName);
-                return;
+            URL url = new URL(apiUrl);
+            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestMethod("GET");
+            connection.setConnectTimeout(10000);
+            connection.setReadTimeout(10000);
+            connection.setRequestProperty("User-Agent", "Complementary-Installer");
+            
+            if (connection.getResponseCode() != HttpURLConnection.HTTP_OK) {
+                System.out.println("Failed to fetch from Modrinth API: " + connection.getResponseCode());
+                JOptionPane.showMessageDialog(this, 
+                    "Failed to contact Modrinth API (HTTP " + connection.getResponseCode() + ").\n" +
+                    "The shader information could not be retrieved.", 
+                    "API Connection Error", 
+                    JOptionPane.ERROR_MESSAGE);
+                return null;
             }
             
-            // Download the file
-            downloadEuphoriaPatcher(downloadInfo, modsFolder, finalShaderName);
-            
-        } catch (Exception e) {
-            System.out.println("Error downloading EuphoriaPatcher: " + e.getMessage());
-            e.printStackTrace();
-            completeInstallation(finalShaderName);
-        }
-    }
-
-    private boolean checkExistingEuphoriaPatcher(File modsFolder, String requiredVersion) {
-        File[] existingFiles = modsFolder.listFiles();
-        if (existingFiles != null) {
-            for (File file : existingFiles) {
-                if (file.getName().contains("EuphoriaPatcher") && file.getName().contains(requiredVersion)) {
-                    System.out.println("EuphoriaPatcher version " + requiredVersion + " already exists: " + file.getName());
-                    return true;
-                }
+            // Read the response
+            BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
+            StringBuilder responseBuilder = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                responseBuilder.append(line);
             }
-        }
-        return false;
-    }
-
-    private JSONObject findEuphoriaPatcherDownload(String requiredVersion) throws IOException, JSONException {
-        String projectId = "4H6sumDB"; // EuphoriaPatcher project ID on Modrinth
-        String apiUrl = "https://api.modrinth.com/v2/project/" + projectId + "/version";
-        
-        URL url = new URL(apiUrl);
-        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-        connection.setRequestMethod("GET");
-        connection.setConnectTimeout(10000);
-        connection.setReadTimeout(10000);
-        connection.setRequestProperty("User-Agent", "Complementary-Installer");
-        
-        if (connection.getResponseCode() != HttpURLConnection.HTTP_OK) {
-            System.out.println("Failed to fetch from Modrinth API: " + connection.getResponseCode());
-            return null;
-        }
-        
-        // Read the response
-        BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
-        StringBuilder responseBuilder = new StringBuilder();
-        String line;
-        while ((line = reader.readLine()) != null) {
-            responseBuilder.append(line);
-        }
-        reader.close();
-        
-        // Find matching version and file
-        JSONArray versionsArray = new JSONArray(responseBuilder.toString());
-        
-        for (int i = 0; i < versionsArray.length(); i++) {
-            JSONObject version = versionsArray.getJSONObject(i);
+            reader.close();
             
-            // Check if this version supports fabric
-            JSONArray loaders = version.optJSONArray("loaders");
-            boolean supportsFabric = false;
+            // Parse versions array
+            JSONArray versionsArray = new JSONArray(responseBuilder.toString());
             
-            if (loaders != null) {
-                for (int j = 0; j < loaders.length(); j++) {
-                    if ("fabric".equals(loaders.getString(j))) {
-                        supportsFabric = true;
-                        break;
-                    }
-                }
-            }
-            
-            // Skip if fabric not supported or version doesn't match
-            if (!supportsFabric) continue;
-            
-            String versionNumber = version.getString("version_number");
-            if (requiredVersion != null && !versionNumber.contains(requiredVersion)) continue;
-            
-            // Find a suitable file
-            JSONArray files = version.getJSONArray("files");
-            for (int j = 0; j < files.length(); j++) {
-                JSONObject file = files.getJSONObject(j);
-                String filename = file.getString("filename");
+            // Find the appropriate version
+            for (int i = 0; i < versionsArray.length(); i++) {
+                JSONObject version = versionsArray.getJSONObject(i);
                 
-                if (filename != null) {
+                // Check loader filter if specified
+                if (loaderFilter != null && !loaderFilter.isEmpty()) {
+                    JSONArray loaders = version.optJSONArray("loaders");
+                    boolean matchesLoader = false;
+                    
+                    if (loaders != null) {
+                        for (int j = 0; j < loaders.length(); j++) {
+                            if (loaderFilter.equals(loaders.getString(j))) {
+                                matchesLoader = true;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if (!matchesLoader) continue;
+                }
+                
+                // We found a matching version, get the file
+                JSONArray files = version.getJSONArray("files");
+                if (!files.isEmpty()) {
+                    JSONObject file = files.getJSONObject(0);
+                    String filename = file.getString("filename");
+                    
                     JSONObject result = new JSONObject();
                     result.put("url", file.getString("url"));
                     result.put("filename", filename);
-                    result.put("version", versionNumber);
+                    result.put("version", version.getString("version_number"));
+                    result.put("projectId", projectId);
                     return result;
                 }
             }
-        }
-        
-        return null;
-    }
-
-    private void downloadEuphoriaPatcher(JSONObject downloadInfo, File modsFolder, String finalShaderName) {
-        try {
-            String downloadUrl = downloadInfo.getString("url");
-            String fileName = downloadInfo.getString("filename");
-            String versionNumber = downloadInfo.getString("version");
             
-            System.out.println("Found version: " + versionNumber + " with download URL: " + downloadUrl);
-            
-            File outputFile = new File(modsFolder, fileName);
-            System.out.println("Downloading to: " + outputFile.getAbsolutePath());
-            
-            final Downloader modrinthDownloader = new Downloader(downloadUrl, outputFile);
-            final String finalVersionNumber = versionNumber;
-            
-            modrinthDownloader.addPropertyChangeListener(event -> {
-                if ("progress".equals(event.getPropertyName())) {
-                    int modrinthProgress = (Integer) event.getNewValue();
-                    int scaledProgress = 95 + (modrinthProgress / 20); // Scale to 95-100%
-                    progressBar.setValue(Math.min(99, scaledProgress));
-                } else if (event.getNewValue() == SwingWorker.StateValue.DONE) {
-                    try {
-                        modrinthDownloader.get();
-                        System.out.println("Successfully downloaded EuphoriaPatcher version: " + finalVersionNumber);
-                        completeInstallation(finalShaderName);
-                    } catch (Exception e) {
-                        System.out.println("Failed to download from Modrinth: " + e.getMessage());
-                        e.printStackTrace();
-                        completeInstallation(finalShaderName);
-                    }
-                }
-            });
-            
-            modrinthDownloader.execute();
-            
+            return null;
         } catch (Exception e) {
-            System.out.println("Error in download process: " + e.getMessage());
-            e.printStackTrace();
-            completeInstallation(finalShaderName);
+            System.out.println("Error fetching from Modrinth: " + e.getMessage());
+            
+            if (isNetworkError(e) && showNetworkErrorDialog("fetching information from Modrinth")) {
+                // User wants to retry
+                return getLatestModrinthInfo(projectId, loaderFilter);
+            }
+            // Re-throw the exception if it's not a network error or user doesn't want to retry
+            throw e;
         }
     }
 
@@ -1172,6 +1217,20 @@ public class NewInstaller extends JFrame {
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    private void registerStatsCleanupHook() {
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            try {
+                File shaderDir = new File(getInstallDir().toFile(), "shaderpacks");
+                deleteStatisticsConfirmation(shaderDir);
+                System.out.println("Cleanup performed during shutdown");
+            } catch (Exception e) {
+                System.out.println("Error during shutdown cleanup: " + e.getMessage());
+            }
+        }));
+        
+        System.out.println("Registered statistics cleanup hook");
     }
 
     /**
