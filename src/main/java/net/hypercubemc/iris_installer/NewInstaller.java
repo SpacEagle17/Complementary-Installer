@@ -53,7 +53,7 @@ public class NewInstaller extends JFrame {
     private static final String COMPLEMENTARY_UNBOUND_PROJECT_ID = "R6NEzAwj";
     private static final String EUPHORIA_PATCHES_PROJECT_ID = "4H6sumDB";
 
-    private static final String compStatsFile = "replaceWithActualName.txt";
+    private static String compStatsFile = "fileNamePlaceholder.txt";
     private static final String euphoriaStatsFile = "aaaConfirmEPDownload.txt";
 
     Settings settings = new Settings();
@@ -821,6 +821,7 @@ public class NewInstaller extends JFrame {
 
         String projectId = styleIsUnbound ? COMPLEMENTARY_UNBOUND_PROJECT_ID : COMPLEMENTARY_REIMAGINED_PROJECT_ID;
         String shaderType = styleIsUnbound ? "Complementary Unbound" : "Complementary Reimagined";
+        compStatsFile = styleIsUnbound ? "aaaConfirmUnboundDownload.txt" : "aaaConfirmReimaginedDownload.txt";
         
         // Get shader info from Modrinth
         JSONObject shaderInfo;
